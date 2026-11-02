@@ -845,7 +845,7 @@ def main():
     else:
         graph=seed
         solver={"attempted":False,"used":False,"reviewStatus":"Deterministic seed geometry only; awaiting native LOOM review"}
-    if solver.get("attempted") and not solver.get("lineOrderUsed"):
+    if solver.get("attempted") and solver.get("mode")!="line_order_only":
         solver["reviewStatus"]=("Native octi geometry accepted" if solver["used"] else
                  "Native octi candidate REJECTED; displayed source-preserving seed")
     assert adjacency(graph)==adjacency(seed)
