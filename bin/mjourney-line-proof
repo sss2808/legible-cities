@@ -306,7 +306,7 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 <button id="both" aria-pressed="true">Both lines</button>
 <button id="ae" aria-pressed="false">A&E / EPC</button>
 <button id="direct" aria-pressed="false">Direct customer</button>
-<button id="labels">Labels</button>
+<button id="labelToggle" aria-pressed="false">Labels</button>
 <button id="zoomIn" aria-label="Zoom in">+</button>
 <button id="zoomOut" aria-label="Zoom out">−</button>
 <button id="fit">Fit</button>
@@ -332,7 +332,7 @@ function focus(name){svg.classList.toggle("focus",name!=="both");
   for(const g of lines){g.classList.toggle("selected-line",name!=="both"&&g.dataset.line===groups[name])}
 }
 for(const name of Object.keys(buttons))buttons[name].onclick=()=>focus(name);
-document.querySelector("#labels").onclick=e=>{
+document.querySelector("#labelToggle").onclick=e=>{
 const on=svg.classList.toggle("all-labels");e.currentTarget.setAttribute("aria-pressed",String(on));};
 const circles=[...svg.querySelectorAll("#stations circle[data-station-id]")];
 for(const c of circles)c.addEventListener("click",()=>{
