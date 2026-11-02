@@ -162,6 +162,15 @@ class SourceCertificateTests(unittest.TestCase):
         self.assertFalse(report["passed"], report)
         self.assertIn("incorrect sourceLayerId", " ".join(report["errors"]))
 
+    def test_spoofed_relation_kind_fails(self):
+        graph = copy.deepcopy(self.seed)
+        edge = next(e for e in graph.edges
+                    if e.props.get("sourceEdgeIds") == ["edge01"])
+        edge.props["sourceKind"] = "handoff"
+        report = validate_projection_graph(graph, self.manifest)
+        self.assertFalse(report["passed"], report)
+        self.assertIn("source relationship kind changed", " ".join(report["errors"]))
+
     def test_reversed_cartographic_source_endpoint_fails(self):
         graph = copy.deepcopy(self.seed)
         edge = next(e for e in graph.edges
