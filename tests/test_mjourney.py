@@ -182,3 +182,25 @@ def test_native_dark_compatible_viewer_removes_timetable_affordances(source):
     assert 'header .bar:nth-of-type(2)' in html
     assert 'e.stopImmediatePropagation()' in html
     assert not anim.trips
+
+
+
+def test_b2b_starter_cross_channel_regression_is_source_backed():
+    path = FIXTURE.with_name("b2b-starter-v1.json")
+    source = json.loads(path.read_text(encoding="utf-8"))
+    assert source["journeyId"] == "b2b-starter"
+    assert len(source["moments"]) == 19
+    assert len(source["connections"]) == 18
+    out = mjourney.build_network_projection(source, full=True)
+    assert len(out.graph.stations) == 19
+    assert len(out.graph.edges) == 18
+    assert out.audit["projection"]["crossLayerConnectionCount"] == 15
+    assert out.audit["projection"]["inferredConnections"] == 0
+    assert set(out.graph.labels) == {"Online", "Omni", "Offline"}
+    assert all(e.props["sourceEdgeIds"][0] in
+               {s["id"] for s in source["connections"]} for e in out.graph.edges)
+    result = svg_renderer.render(out.graph, width=1800,
+                                 style=svg_renderer.Style(background="#1f1915",
+                                                          label_color="#f2ede6"))
+    assert set(result.colors) == set(out.graph.labels)
+    assert "<svg" in result.svg
