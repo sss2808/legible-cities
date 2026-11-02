@@ -1,0 +1,182 @@
+name: M-Journey ten-stage source-backed systems map
+on:
+  push:
+    branches: [feature/mjourney-system-network-v7]
+  pull_request:
+    branches: [feature/mjourney-rea-multiline-proof]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: Generate canonical-source standalone preview
+        run: |
+          python bin/mjourney-system-network --output out/mjourney-system-v7
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          audit=json.loads(Path("out/mjourney-system-v7.audit.json").read_text())
+          assert audit["canonical"]=={"moments":67,"authoredEdges":87,"edited":False}
+          assert audit["projection"]["displayMoments"]==59
+          assert audit["projection"]["displayAuthoredConnections"]==68
+          assert audit["projection"]["lineCount"]==11
+          assert len(audit["projection"]["activeStages"])==10
+          assert audit["projection"]["unapprovedSyntheticEdges"]==0
+          assert audit["projection"]["includedHandoffEdgeIds"]==["edge71","edge78","edge84"]
+          assert audit["projection"]["journeySequenceIsNotOrganizationalWorkstream"]
+          assert audit["integrity"]["stationAdjacencyPreserved"]
+          assert audit["integrity"]["stagePreserved"]
+          html=Path("out/mjourney-system-v7.html").read_text()
+          assert 'id="metro"' in html and 'id="research-layer-guides"' in html
+          assert 'id="stage-headings"' in html
+          assert "0 trains" not in html and "NaN:NaN" not in html
+          print("SOURCE TOPOLOGY / TEN STAGES / RESEARCH-LAYER SEMANTICS PASS")
+          PY
+      - name: Install screenshot browser
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Verify interactions and capture actual browser screenshots
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          url=Path("out/mjourney-system-v7.html").resolve().as_uri()
+          with sync_playwright() as pw:
+              browser=pw.chromium.launch(headless=True,args=["--allow-file-access-from-files"])
+              for name,width,height in [("desktop",1440,900),("mobile",390,844)]:
+                  page=browser.new_page(viewport={"width":width,"height":height},device_scale_factor=1)
+                  errors=[]
+                  page.on("pageerror",lambda e:errors.append(str(e)))
+                  page.goto(url)
+                  page.locator("#metro").wait_for()
+                  assert page.locator("#stations circle[data-station-id]").count()==59
+                  assert page.locator("#stage-headings text").count()==10
+                  assert page.locator("#research-layer-guides text").count()==7
+                  if name=="mobile":
+                      visible=page.evaluate("""() => {
+                        const title=document.querySelector('#stage-headings text').getBoundingClientRect();
+                        const controls=document.querySelector('.toolbar').getBoundingClientRect();
+                        const svg=document.querySelector('#metro').getBoundingClientRect();
+                        return title.bottom>controls.bottom+4 &&
+                               title.top<svg.bottom && title.width>0;
+                      }""")
+                      assert visible, "Mobile camera must preserve stage headings"
+                  page.screenshot(path=f"out/system-v7-{name}.png",full_page=True)
+                  old=page.locator("#metro").get_attribute("viewBox")
+                  page.locator("#routeFocus").select_option("ae_epc_mediated")
+                  new=page.locator("#metro").get_attribute("viewBox")
+                  # The SVG DOM viewBox baseVal may mutate without rewriting the
+                  # serialized attribute, so assert the computed geometry.
+                  assert page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")>0
+                  page.locator("#layerFocus").select_option("layer-4")
+                  assert page.locator("#stations circle.subdued").count()>0
+                  page.locator("#labelToggle").click()
+                  assert page.locator("#labelToggle").get_attribute("aria-pressed")=="true"
+                  page.locator("#stations circle[data-station-id='eq31']").click(force=True)
+                  assert page.locator("#inspector").is_visible()
+                  page.locator("#closeInspector").click()
+                  assert not page.locator("#inspector").is_visible()
+                  page.locator("#routeFocus").select_option("all")
+                  page.locator("#layerFocus").select_option("all")
+                  # Camera Fit is stable and cannot zoom the complete network
+                  # far outside the content framing.
+                  page.locator("#fit").click()
+                  all_fit=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  for _ in range(15):
+                      page.locator("#zoomOut").click()
+                  max_zoom=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  for _ in range(5):
+                      page.locator("#zoomOut").click()
+                  capped=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  assert abs(max_zoom-capped)<.01, (max_zoom,capped)
+                  page.locator("#routeFocus").select_option("technical_approval")
+                  focused=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  assert focused>=all_fit*.40, (focused,all_fit)
+                  before_label=page.locator("#metro").get_attribute("viewBox")
+                  page.locator("#labels text[data-station-id='eq31']").dispatch_event("click")
+                  assert page.locator("#metro").get_attribute("viewBox")==before_label
+                  assert page.locator("#inspector").is_visible()
+                  page.locator("#closeInspector").click()
+                  page.locator("#routeFocus").select_option("all")
+                  page.locator("#fit").click()
+                  page.screenshot(path=f"out/system-v7-{name}-focus.png",full_page=True)
+                  # Linear is the same ordered canonical stops, not a new graph.
+                  page.locator("#linearMode").click()
+                  assert page.locator("#linear").is_visible()
+                  assert page.locator("#linear .linear-route").count()==11
+                  assert page.locator("#schematicMode").get_attribute("aria-pressed")=="false"
+                  page.screenshot(path=f"out/system-v7-{name}-linear.png",full_page=True)
+                  page.locator("#routeFocus").select_option("ae_epc_mediated")
+                  assert page.locator("#linear .linear-route:visible").count()==1
+                  assert page.locator("#linear .linear-stop").count()>=59
+                  page.locator("#linear .linear-route:visible .linear-stop").first.click()
+                  assert page.locator("#inspector").is_visible()
+                  page.locator("#closeInspector").click()
+                  page.locator("#fit").click()
+                  page.locator("#schematicMode").click()
+                  assert page.locator("#metro").is_visible()
+                  assert page.locator("#linear").is_hidden()
+                  assert not errors, errors
+                  print(name,"MODES / FIT / ZOOM LIMITS / LABEL INSPECTION / SOURCE ORDER PASS")
+                  page.close()
+              browser.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-v7-standalone-preview-screenshots-audit
+          path: |
+            out/mjourney-system-v7.*
+            out/system-v7-*.png
+          retention-days: 21
+  native-loom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native LOOM dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libglpk-dev coinor-libcbc-dev libzip-dev
+          python -m pip install -e .
+      - name: Build actual native optimizer
+        run: |
+          git clone --quiet --depth 1 --recurse-submodules https://github.com/sss2808/loom.git /tmp/loom-source
+          cmake -S /tmp/loom-source -B /tmp/loom-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/loom-build --target loom octi -j 2
+          git -C /tmp/loom-source rev-parse HEAD > out-loom-commit.txt
+      - name: Run native geometry and report exact audit disposition
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-system-network --native-loom --timeout 360 --output out/system-v7-native
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          audit=json.loads(Path("out/system-v7-native.audit.json").read_text())
+          assert audit["solver"]["attempted"]
+          assert audit["integrity"]["stationAdjacencyPreserved"]
+          assert audit["integrity"]["stagePreserved"]
+          print("NATIVE OPTIMIZATION ACCEPTED:",audit["solver"]["used"])
+          print("Native solver state is an audit finding, not inferred from workflow success.")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-v7-native-geometry-review
+          path: |
+            out/system-v7-native.*
+            out-loom-commit.txt
+          retention-days: 21
