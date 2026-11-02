@@ -2,6 +2,8 @@ name: M-Journey ten-stage source-backed systems map
 on:
   push:
     branches: [feature/mjourney-system-network-v7]
+  pull_request:
+    branches: [feature/mjourney-rea-multiline-proof]
   workflow_dispatch:
 permissions:
   contents: read
