@@ -575,13 +575,19 @@ function fitBox(box,{focus=false}={}){
  const minimum=focus?baseline.w*(innerWidth<=760?.35:.45):0;
  const w=Math.max(box.w+2*padX,(box.h+2*padY)*aspect,minimum);
  const h=w/aspect;
- return {x:box.x+box.w/2-w/2,y:box.y+box.h/2-h/2+h*.10,w,h};
+ return {x:box.x+box.w/2-w/2,y:box.y+box.h/2-h/2+h*(innerWidth<=760?.02:.10),w,h};
 }
 function setView(v){
  if(![v.x,v.y,v.w,v.h].every(Number.isFinite)||v.w<=0||v.h<=0)return;
  view={...v};
  svg.setAttribute("viewBox",[v.x,v.y,v.w,v.h].map(x=>x.toFixed(3)).join(" "));
  if(mode==="schematic")updateLabels();
+}
+function mobileStageBox(){
+ const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
+ const stations=circles.filter(c=>first.has(c.dataset.stationId));
+ const headings=[...svg.querySelectorAll("#stage-headings text")].slice(0,3);
+ return unionBoxes([...stations,...headings]);
 }
 function fitVisible(){
  if(mode==="linear"){
@@ -592,8 +598,7 @@ function fitVisible(){
  if(innerWidth<=760&&!focus){
   // Phone Fit keeps a readable stage window with lateral panning, rather
   // than shrinking all ten stages into a single illegible phone-width image.
-  const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
-  setView(fitBox(unionBoxes(circles.filter(c=>first.has(c.dataset.stationId)))));
+  setView(fitBox(mobileStageBox()));
  }else setView(fitBox(visibleContentBox(),{focus}));
 }
 function zoom(factor){
@@ -746,10 +751,7 @@ svg.addEventListener("pointercancel",()=>{drag=null;svg.classList.remove("grabbe
 svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.12:.89)},{passive:false});
 baseline=fitBox(visibleContentBox(true));
 if(innerWidth<760){
- const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
- const items=circles.filter(c=>first.has(c.dataset.stationId));
- const b=unionBoxes(items);
- setView(fitBox(b));
+ setView(fitBox(mobileStageBox()));
 }else fitVisible();
 })();</script></body></html>"""
     return document.replace("__SVG__",svg).replace("__DATA__",payload)
