@@ -331,7 +331,7 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 <h1>Shared pathways and authorized activity branches</h1>
 <div class="subtitle">23 research moments · 25 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div></header>
 <nav aria-label="Map focus">
-<button id="both" aria-pressed="true">Both lines</button>
+<button id="both" aria-pressed="true">All lines</button>
 <button id="ae" aria-pressed="false">A&E / EPC</button>
 <button id="direct" aria-pressed="false">Direct customer</button>
 <button id="tech" aria-pressed="false">Technical review</button>
