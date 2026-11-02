@@ -9,6 +9,8 @@ import json
 from pathlib import Path
 import runpy
 import unittest
+import tempfile
+from unittest.mock import patch
 
 from schematic.mjourney_source_integrity import build_source_manifest
 from schematic.linegraph import LineGraph
@@ -110,6 +112,34 @@ class StageDifferentialTests(unittest.TestCase):
         self.assertFalse(rejected["accepted"],rejected)
         self.assertTrue(rejected["perLineAdjacencyPreserved"])
         self.assertFalse(rejected["stageOrderPreserved"])
+
+    def test_line_order_only_mode_accepts_source_preserving_graph_without_octi(self):
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(self.v7["loom"],"run",
+                return_value=self.v7["to_solver"](self.seed).to_geojson()) as runner:
+                graph,status=self.v7["native_line_order_geometry"](
+                    self.seed,self.source,Path(td)/"line",30,self.manifest)
+            runner.assert_called_once()
+            self.assertEqual(runner.call_args.args[0],"loom")
+            self.assertTrue(status["lineOrderUsed"],status)
+            self.assertFalse(status["used"])
+            self.assertFalse(status["octiAttempted"])
+            self.assertEqual(self.v7["adjacency"](graph),self.v7["adjacency"](self.seed))
+
+    def test_line_order_only_mode_falls_back_on_fabricated_track(self):
+        bad=copy.deepcopy(self.seed)
+        edge=next(e for e in bad.edges if e.props.get("sourceEdgeIds")==["edge01"])
+        edge.dst="eq67"
+        edge.geometry[-1]=bad.nodes["eq67"].coord
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(self.v7["loom"],"run",
+                return_value=self.v7["to_solver"](bad).to_geojson()):
+                graph,status=self.v7["native_line_order_geometry"](
+                    self.seed,self.source,Path(td)/"line",30,self.manifest)
+            self.assertFalse(status["lineOrderUsed"])
+            self.assertFalse(status["used"])
+            self.assertFalse(status["adjacencyPreserved"])
+            self.assertEqual(self.v7["adjacency"](graph),self.v7["adjacency"](self.seed))
 
     def test_coordinate_roundtrip_keeps_all_station_identities(self):
         transformed=self.v7["from_solver"](self.v7["to_solver"](self.seed))
