@@ -205,6 +205,15 @@ def svg_with_stages(original,graph,source):
     positions={c.attrib["data-station-id"]:(float(c.attrib["cx"]),float(c.attrib["cy"]))
                for c in circles if c.attrib.get("data-station-id")}
     assert len(positions)==18
+    # LOOM node IDs are *unstable* internal pointers. Resolve rendered label
+    # data-node references back to canonical station IDs before assigning LOD.
+    by_pointer={c.attrib.get("data-node"):c.attrib.get("data-station-id")
+                for c in circles if c.attrib.get("data-station-id")}
+    label_group=root.find(".//"+namespace+"g[@id='labels']")
+    if label_group is not None:
+        for el in label_group.findall(namespace+"text"):
+            canonical=by_pointer.get(el.attrib.get("data-node"))
+            if canonical:el.set("data-station-id",canonical)
     # Compute transform from actual source to renderer's SVG positions, not
     # pre-normalized assumptions or extra copies of station coordinates.
     def fit(axis):
@@ -285,7 +294,7 @@ figure{margin:0;position:relative;overflow:hidden;background:#211b17}
 #metro #stations circle.selected-station{r:10;stroke:#fff9d1;stroke-width:4}
 #metro #labels text{paint-order:stroke;stroke:#211b17;stroke-width:3}
 #metro #labels text{opacity:0}
-#metro #labels text[data-node="eq31"],#metro #labels text[data-node="eq37"],#metro #labels text[data-node="eq39"],#metro #labels text[data-node="eq32"],#metro #labels text[data-node="eq33"]{opacity:1}
+#metro #labels text[data-station-id="eq31"],#metro #labels text[data-station-id="eq37"],#metro #labels text[data-station-id="eq39"],#metro #labels text[data-station-id="eq32"],#metro #labels text[data-station-id="eq33"]{opacity:1}
 #metro.all-labels #labels text{opacity:1}
 .figlegend{position:absolute;left:22px;bottom:15px;background:#1a1713e8;border:1px solid #5b4c40;border-radius:8px;padding:11px 14px;font-size:12px;max-width:500px}
 .key{display:inline-block;width:20px;height:5px;vertical-align:middle;margin:0 6px 1px 12px;border-radius:3px}
