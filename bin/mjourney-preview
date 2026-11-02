@@ -130,9 +130,11 @@ def main(argv: list[str] | None = None) -> int:
                              line_order=order)
         page = animate.texts(
             anim, result.svg, stem=args.output.stem,
-            title="Equipment buying journey | M-Journey",
-            name="Equipment buying journey",
-            subtitle="Source-backed network · no timetable",
+            title=("B2B channel journey | M-Journey" if source["journeyId"] == "b2b-starter"
+                   else "Equipment buying journey | M-Journey"),
+            name=("B2B channel journey" if source["journeyId"] == "b2b-starter"
+                  else "Equipment buying journey"),
+            subtitle="Source-backed transitions · no timetable",
             back="https://github.com/sss2808/legible-cities/pull/1",
         )[f"{args.output.stem}.html"]
         viewer = args.output.with_suffix(".html")
