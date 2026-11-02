@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""Generate and audit a V7-selected M-Journey source certificate, without LOOM.
+
+This is a P0a adapter bridge, not a native optimization or acceptance test.
+The immutable source graph is not modified. The V7 route selection is loaded
+from the current standalone script so no second handwritten route inventory
+can silently drift from the renderer.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import runpy
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from schematic.linegraph import LineGraph
+from schematic.mjourney_source_integrity import (
+    build_source_manifest, validate_projection_graph, verify_source_manifest,
+)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--source", type=Path,
+                    default=ROOT / "fixtures/mjourney/equipment-sanitized-v1.json")
+    ap.add_argument("--v7-script", type=Path, default=ROOT / "bin/mjourney-system-network")
+    ap.add_argument("--output", type=Path, default=Path("out/mjourney-source-certificate.json"))
+    ap.add_argument("--lock", type=Path,
+                    default=ROOT / "fixtures/mjourney/equipment-source-certificate-lock-v7.json",
+                    help="Frozen source/projection baseline, not generated from current input")
+    ap.add_argument("--candidate", type=Path, help="Optional additional graph GeoJSON to inspect")
+    ap.add_argument("--post-solver", action="store_true",
+                    help="Allow geometry helper nodes; reports direction as unverifiable")
+    args = ap.parse_args()
+    raw = args.source.read_bytes()
+    source = json.loads(raw)
+    # Reading route definitions is a temporary V7 compatibility boundary.
+    # Future V8 editor should pass a frozen approved projection contract instead.
+    v7 = runpy.run_path(str(args.v7_script))
+    routes = v7["ROUTES"]
+    manifest = build_source_manifest(source, routes, source_bytes=raw)
+    canonical = verify_source_manifest(source, manifest, routes, source_bytes=raw)
+    lock = json.loads(args.lock.read_text(encoding="utf-8"))
+    expected = {
+        "schema": "mjourney-p0a-source-lock/v1",
+        "sourceBytesSha256": manifest["sourceBytesSha256"],
+        "sourceSemanticSha256": manifest["semanticSha256"],
+        "canonicalCounts": manifest["canonicalCounts"],
+        "projectionCounts": manifest["projectionCounts"],
+    }
+    lock_errors = [f"{key}: frozen value differs from the source projection"
+                   for key, value in expected.items() if lock.get(key) != value]
+    if lock.get("sourceFixture") != "fixtures/mjourney/equipment-sanitized-v1.json":
+        lock_errors.append("source fixture lock path changed")
+    frozen = {"passed": not lock_errors, "errors": lock_errors,
+              "sourceBytesSha256": manifest["sourceBytesSha256"],
+              "sourceSemanticSha256": manifest["semanticSha256"]}
+    seed = v7["assemble"](source)
+    seed_review = validate_projection_graph(seed, manifest)
+    candidate_review = None
+    if args.candidate is not None:
+        candidate = LineGraph.from_geojson(json.loads(args.candidate.read_text()))
+        candidate_review = validate_projection_graph(
+            candidate, manifest, require_source_edge_ids=not args.post_solver
+        )
+    result = {
+        "manifest": manifest,
+        "canonicalReview": canonical,
+        "frozenBaselineReview": frozen,
+        "v7SeedReview": seed_review,
+        "candidateReview": candidate_review,
+        "nativeOptimizationAttempted": False,
+        "status": "P0a source validation only; no native geometry acceptance",
+    }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n",
+                           encoding="utf-8")
+    print(json.dumps({
+        "sourceSemanticSha256": manifest["semanticSha256"],
+        "sourceBytesSha256": manifest["sourceBytesSha256"],
+        "counts": manifest["projectionCounts"],
+        "canonicalPassed": canonical["passed"],
+        "frozenBaselinePassed": frozen["passed"],
+        "seedPassed": seed_review["passed"],
+        "candidatePassed": None if candidate_review is None else candidate_review["passed"],
+    }, indent=2))
+    if not canonical["passed"] or not seed_review["passed"] or not frozen["passed"]:
+        raise SystemExit(1)
+    if candidate_review is not None and not candidate_review["passed"]:
+        raise SystemExit(2)
+
+
+if __name__ == "__main__":
+    main()
