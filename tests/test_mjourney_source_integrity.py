@@ -29,6 +29,13 @@ class SourceCertificateTests(unittest.TestCase):
                                              source_bytes=cls.raw)
         cls.seed = cls.v7["assemble"](cls.source)
 
+    def test_frozen_source_lock_matches_exact_baseline(self):
+        lock=json.loads((ROOT/"fixtures/mjourney/equipment-source-certificate-lock-v7.json").read_text())
+        self.assertEqual(lock["sourceBytesSha256"], self.manifest["sourceBytesSha256"])
+        self.assertEqual(lock["sourceSemanticSha256"], self.manifest["semanticSha256"])
+        self.assertEqual(lock["canonicalCounts"], self.manifest["canonicalCounts"])
+        self.assertEqual(lock["projectionCounts"], self.manifest["projectionCounts"])
+
     def test_full_canonical_source_and_selected_projection(self):
         self.assertEqual(self.manifest["canonicalCounts"],
                          {"moments": 67, "relations": 87, "stages": 10, "layers": 7})
