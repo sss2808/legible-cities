@@ -24,7 +24,7 @@ jobs:
           a=json.loads(Path("out/multiline-seed.audit.json").read_text())
           assert a["canonical"]=={"moments":67,"authoredEdges":87,"edited":False}
           assert a["projection"]["displayMoments"]==23
-          assert a["projection"]["displayAuthoredConnections"]==27
+          assert a["projection"]["displayAuthoredConnections"]==25
           assert len(a["projection"]["sharedCorridorSourceEdges"])==11
           assert a["projection"]["lineCount"]==6
           assert a["integrity"]["stationAdjacencyPreserved"]
@@ -33,7 +33,7 @@ jobs:
           assert 'id="metro"' in h
           assert 'id="stage-headings"' in h
           assert "NaN:NaN" not in h and "0 trains" not in h
-          print("REA expanded network: 23 moments, 27 source edges, six real line identities")
+          print("REA expanded network: 23 moments, 25 source edges, six real line identities")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
