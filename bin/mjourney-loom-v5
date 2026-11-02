@@ -1,0 +1,145 @@
+"""LOOM geometry proof with deterministic ordinal stage constraints.
+GPL-3.0-or-later; research moments are not transit passengers.
+"""
+import argparse, datetime, hashlib, json, math
+from pathlib import Path
+from schematic import loom, animate
+from schematic.linegraph import LineGraph, Node, Edge
+from schematic.mjourney import build_system_v3
+from schematic.render import render, Style
+
+def sha(x):
+    return hashlib.sha256(json.dumps(x,sort_keys=True).encode()).hexdigest()
+
+def octi(a,b):
+    dx,dy=b[0]-a[0],b[1]-a[1]
+    diag=min(abs(dx),abs(dy))
+    if diag<1e-8: return [a,b] if a!=b else [a]
+    elbow=(a[0]+math.copysign(diag,dx),a[1]+math.copysign(diag,dy))
+    return [a,elbow,b] if elbow!=b else [a,b]
+
+def constrain(graph,source):
+    byid={m["id"]:m for m in source["moments"]}
+    stages=sorted(source["stages"],key=lambda s:s["order"])
+    base={n.station_id:n for n in graph.stations}
+    assert len(base)==len(graph.stations)==len(byid) and set(base)==set(byid),"LOOM station identity failed"
+    expected={l["name"] for l in source["layers"]}
+    assert set(graph.labels)==expected,"LOOM line identity failed"
+    ranges={}; left=120.0
+    for st in stages:
+        count=sum(m["stageId"]==st["id"] for m in byid.values())
+        width=max(190.0,70+64*count)
+        ranges[st["id"]]=(left,left+width)
+        left+=width+44
+    ys=[n.coord[1] for n in base.values()]
+    lo,span=min(ys),max(ys)-min(ys)
+    new={}
+    for st in stages:
+        ordered=sorted((n for n in base.values() if byid[n.station_id]["stageId"]==st["id"]),
+                       key=lambda n:(n.coord[0],n.coord[1],n.station_id))
+        a,b=ranges[st["id"]]
+        for i,n in enumerate(ordered):
+            x=(a+b)/2 if len(ordered)==1 else a+28+(b-a-56)*i/(len(ordered)-1)
+            y=155+(n.coord[1]-lo)/span*920 if span>1e-12 else 615
+            new[n.id]=(x,y)
+    # Geometric junctions remain non-stations, moved with nearby solved stations.
+    for nid,n in graph.nodes.items():
+        if nid in new:continue
+        near=sorted(base.values(),key=lambda s:((n.coord[0]-s.coord[0])**2+
+                                              (n.coord[1]-s.coord[1])**2,s.station_id))[:4]
+        w=[1/max(1e-8,(n.coord[0]-s.coord[0])**2+(n.coord[1]-s.coord[1])**2) for s in near]
+        tot=sum(w); new[nid]=(sum(q*new[s.id][0] for s,q in zip(near,w))/tot,
+                             sum(q*new[s.id][1] for s,q in zip(near,w))/tot)
+    nodes={nid:Node(id=n.id,coord=new[nid],station_id=n.station_id,
+                    station_label=byid[n.station_id]["label"] if n.station_id in byid else n.station_label,
+                    props=dict(n.props)) for nid,n in graph.nodes.items()}
+    edges=[]
+    for edge in graph.edges:
+        start,end=edge.src,edge.dst
+        if start not in new or end not in new:raise ValueError("dangling LOOM segment")
+        a,b=graph.nodes[start].coord,graph.nodes[end].coord
+        da=(new[start][0]-a[0],new[start][1]-a[1])
+        db=(new[end][0]-b[0],new[end][1]-b[1])
+        interiors=edge.geometry[1:-1]
+        points=[new[start]]
+        for i,(x,y) in enumerate(interiors):
+            t=(i+1)/(len(interiors)+1)
+            points.append((x+(1-t)*da[0]+t*db[0],y+(1-t)*da[1]+t*db[1]))
+        points.append(new[end])
+        route=[points[0]]
+        for a,b in zip(points,points[1:]):
+            for p in octi(a,b)[1:]:
+                if math.dist(p,route[-1])>1e-7:route.append(p)
+        edges.append(Edge(src=start,dst=end,geometry=route,lines=list(edge.lines),
+                          props=dict(edge.props)))
+    result=LineGraph(nodes,edges)
+    for i,st in enumerate(stages):
+        xs=[n.coord[0] for n in result.stations if byid[n.station_id]["stageId"]==st["id"]]
+        assert min(xs)>=ranges[st["id"]][0] and max(xs)<=ranges[st["id"]][1]
+        if i:
+            prev=stages[i-1]
+            former=[n.coord[0] for n in result.stations if byid[n.station_id]["stageId"]==prev["id"]]
+            assert min(xs)>max(former)+9,"stage order not preserved"
+    for e in result.edges:
+        for a,b in zip(e.geometry,e.geometry[1:]):
+            dx,dy=abs(a[0]-b[0]),abs(a[1]-b[1])
+            assert min(dx,dy)<1e-4 or abs(dx-dy)<1e-4,"non-octilinear"
+    windows=[{"id":s["id"],"name":s["shortName"],"startX":ranges[s["id"]][0],
+              "endX":ranges[s["id"]][1]} for s in stages]
+    return result,windows
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--source",default="fixtures/mjourney/equipment-sanitized-v1.json")
+    p.add_argument("--output",default="out/mjourney-equipment-loom-v5")
+    p.add_argument("--timeout",type=int,default=270)
+    args=p.parse_args(); path=Path(args.output);path.parent.mkdir(exist_ok=True,parents=True)
+    source=json.loads(Path(args.source).read_text())
+    projection=build_system_v3(source)
+    seed=projection.graph.to_geojson()
+    # Artificial solver coordinate grid. Never physical location or elapsed time.
+    for feat in seed["features"]:
+        g=feat["geometry"]
+        if g["type"]=="Point":
+            x,y=g["coordinates"];g["coordinates"]=[8+x/2000,48+y/2000]
+        if g["type"]=="LineString":
+            g["coordinates"]=[[8+x/2000,48+y/2000] for x,y in g["coordinates"]]
+    path.with_suffix(".input.geojson").write_text(json.dumps(seed,indent=2))
+    solved=seed;steps={}
+    for name in ("topo","loom","octi"):
+        solved=loom.run(name,solved,timeout=args.timeout)
+        path.with_suffix("."+name+".geojson").write_text(json.dumps(solved,indent=2))
+        steps[name]={"sha256":sha(solved),
+                     "points":sum(f["geometry"]["type"]=="Point" for f in solved["features"]),
+                     "segments":sum(f["geometry"]["type"]=="LineString" for f in solved["features"])}
+        print(name,steps[name],flush=True)
+    graph,windows=constrain(LineGraph.from_geojson(solved),source)
+    path.with_suffix(".constrained.geojson").write_text(json.dumps(graph.to_geojson(),indent=2))
+    layers=sorted(source["layers"],key=lambda l:l["order"])
+    colors={l["name"]:l["color"] for l in layers}; names=[l["name"] for l in layers]
+    result=render(graph,width=2400,style=Style(background="#1f1915",station_fill="#f2ede6",
+           station_stroke_color="#15120f",label_color="#f2ede6",line_width=10,line_gap=1.55,
+           station_radius=4.5,interchange_radius=6.2,station_stroke=2,label_size=11.5,
+           label_offset=10,padding=17,themed=True),line_order=names,colors=colors)
+    path.with_suffix(".svg").write_text(result.svg)
+    animation=animate.build(result,graph,[],datetime.date(2026,11,2),line_order=names)
+    page=animate.texts(animation,result.svg,stem=path.name,
+       title="Equipment buying journey | LOOM constrained System",
+       name="Equipment buying journey",subtitle="Ten authored stages",
+       back="https://github.com/sss2808/legible-cities/pull/1")[path.name+".html"]
+    path.with_suffix(".html").write_text(page)
+    audit={"reviewStatus":"unapproved geometry proof",
+           "engine":"real LOOM topo > loom > octi; original Legible Cities render > animate",
+           "inputRole":"67 source moments; 60 non-traversable organizational guides",
+           "canonical":{"moments":len(source["moments"]),"relationships":len(source["connections"]),
+                        "stages":len(source["stages"]),"layers":len(layers)},
+           "solverSteps":steps,"result":{"stations":len(graph.stations),"edges":len(graph.edges),
+                  "geometryOnlyNodes":len(graph.nodes)-len(graph.stations),
+                  "lines":graph.labels,"droppedLabels":result.dropped_labels},
+           "stageWindows":windows,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
+           "limits":["Geometric junctions are not customer transfers.",
+                     "Layer continuity is not verified directed movement.",
+                     "Stage-constrained repair changes LOOM bends; visual approval pending."]}
+    path.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2))
+    print("RENDERED",path,"stations",len(graph.stations),"labels dropped",len(result.dropped_labels),flush=True)
+if __name__=="__main__":main()
