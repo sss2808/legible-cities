@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""Source-backed cartographic line proof: 18 moments, two named candidate routes.
+This is NOT an edit to the canonical 67/87 research graph or a licensed
+customer journey traversal. Research IDs and line/edge provenance are audited.
+The diagram is an isolated proof of line occupancy and LOOM geometry fidelity.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict, deque
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+import html
+import json
+import math
+import sys
+import xml.etree.ElementTree as ET
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from schematic import loom
+from schematic.linegraph import Edge, Line, LineGraph, Node
+from schematic.render import Style, render
+
+LINES={
+  "ae_epc_mediated":Line("ae_epc_mediated","A&E / EPC mediated","#ef6394"),
+  "direct_customer_led":Line("direct_customer_led","Direct customer-led","#36c9dc"),
+  "technical_review":Line("technical_review","Technical approval review","#d2a458"),
+  "financial_review":Line("financial_review","Finance approval review","#aa90e5"),
+  "site_readiness":Line("site_readiness","Site readiness branch","#58a58c"),
+  "logistics_readiness":Line("logistics_readiness","Logistics readiness branch","#e4a070")
+}
+# Authored source-chain IDs; shared line occupancy is deliberately *both* lines
+# on exactly the same edge, not two fabricated independent journeys.
+SHARED_PREFIX=["edge33","edge34","edge38","edge43"]
+AE=["edge44","edge48","edge49","edge50"]
+DIRECT=["edge45","edge51","edge52"]
+SHARED_SUFFIX=["edge53","edge54","edge55","edge56","edge60","edge61","edge62"]
+TECH=["edge35","edge40"]
+FINANCE=["edge37","edge39","edge42"]
+SITE=["edge57","edge63"]
+LOGISTICS=["edge59","edge64"]
+TRACK_IDS=SHARED_PREFIX+AE+DIRECT+SHARED_SUFFIX+TECH+FINANCE+SITE+LOGISTICS
+# Only layout seed. A station's canonical stage remains supplied by the fixture;
+# this is neither elapsed time nor a claim about physical geography.
+SEEDS={
+ "eq23":(150,465),"eq24":(295,465),
+ "eq25":(455,465),"eq30":(610,465),"eq31":(755,465),
+ "eq32":(915,305),"eq34":(1060,305),"eq36":(1205,305),
+ "eq33":(915,625),"eq35":(1125,625),"eq37":(1365,465),
+ "eq38":(1520,465),"eq39":(1680,465),"eq40":(1835,465),
+ "eq41":(1980,465),"eq45":(2130,465),"eq46":(2295,465),
+ "eq47":(2450,465),
+ "eq26":(525,285),"eq28":(515,650),"eq29":(670,650),
+ "eq42":(2170,260),"eq44":(2170,650)
+}
+# Aesthetic branch routing in the *seed* graph. LOOM must propose new
+# octilinear route polylines; on acceptance those polylines are used verbatim.
+def seed_poly(a,b):
+    x0,y0=a;x1,y1=b
+    dx=x1-x0;dy=y1-y0
+    if abs(dy)<.00001:return [a,b]
+    # horizontal / diagonal / horizontal; the total diagonal changes both
+    # axes equally; all segments are exactly octilinear.
+    d=min(abs(dx),abs(dy))
+    signx=1 if dx>=0 else -1
+    signy=1 if dy>=0 else -1
+    before=(dx-signx*d)/2
+    points=[a,(x0+before,y0),(x0+before+signx*d,y0+signy*d),b]
+    clean=[]
+    for p in points:
+        if not clean or math.dist(p,clean[-1])>.000001:clean.append(p)
+    return clean
+
+def source_records(source):
+    assert len(source["moments"])==67 and len(source["connections"])==87
+    moments={x["id"]:x for x in source["moments"]}
+    edges={e["id"]:e for e in source["connections"]}
+    assert len(TRACK_IDS)==27 and len(set(TRACK_IDS))==27
+    for eid in TRACK_IDS:
+        assert eid in edges and edges[eid]["kind"] in {"sequence","branch","convergence","handoff"}
+    for chain in (SHARED_PREFIX+AE+SHARED_SUFFIX, SHARED_PREFIX+DIRECT+SHARED_SUFFIX):
+        for a,b in zip(chain,chain[1:]):
+            assert edges[a]["toId"]==edges[b]["fromId"],f"broken source pathway: {a} => {b}"
+    required={endpoint for eid in TRACK_IDS for endpoint in (edges[eid]["fromId"],edges[eid]["toId"])}
+    assert required==set(SEEDS) and len(required)==23
+    assert set(e["fromId"] for e in source["connections"] if e["kind"]=="lifecycle_return")-required
+    return moments,edges
+
+def assemble(source):
+    moments,edges=source_records(source)
+    nodes={mid:Node(id=mid,coord=xy,station_id=mid,
+                    station_label=moments[mid]["label"],
+                    props={"stageId":moments[mid]["stageId"],
+                           "sourceMomentId":mid,"sourceLayerId":moments[mid]["layerId"]})
+           for mid,xy in SEEDS.items()}
+    shared=set(SHARED_PREFIX+SHARED_SUFFIX)
+    drawn=[]
+    for eid in TRACK_IDS:
+        e=edges[eid]
+        if eid in shared:carrying=[LINES["ae_epc_mediated"],LINES["direct_customer_led"]]
+        elif eid in AE:carrying=[LINES["ae_epc_mediated"]]
+        elif eid in DIRECT:carrying=[LINES["direct_customer_led"]]
+        elif eid in TECH:carrying=[LINES["technical_review"]]
+        elif eid in FINANCE:carrying=[LINES["financial_review"]]
+        elif eid in SITE:carrying=[LINES["site_readiness"]]
+        elif eid in LOGISTICS:carrying=[LINES["logistics_readiness"]]
+        else:raise ValueError(f"unclassified source edge {eid}")
+        a,b=e["fromId"],e["toId"]
+        drawn.append(Edge(src=a,dst=b,geometry=seed_poly(SEEDS[a],SEEDS[b]),
+                   lines=carrying,props={"sourceEdgeIds":[eid],"sourceKind":e["kind"],
+                                        "projectionRole":"candidate-pathway-track",
+                                        "traversable":True}))
+    return LineGraph(nodes,drawn)
+
+# Native LOOM works in geographic input but optimizes 45-degree angles in a
+# locally projected metric plane. Longitude degrees at latitude 48° are shorter
+# than latitude degrees by cos(48°). Never treat lon/lat degrees as isotropic
+# screen coordinates, or valid LOOM diagonals look 1.49:1 after reprojecting.
+_LOCAL_LONGITUDE_SCALE=math.cos(math.radians(48.0))
+
+def to_solver(graph):
+    """Stage-constrained seed into a local metric-equivalent lon/lat domain."""
+    return graph.reproject(lambda p:(8+p[0]/(2500*_LOCAL_LONGITUDE_SCALE),
+                                      48+p[1]/2500))
+
+def from_solver(graph):
+    """Restore the same local metric axes without rebuilding solver polylines."""
+    return graph.reproject(lambda p:((p[0]-8)*2500*_LOCAL_LONGITUDE_SCALE,
+                                      (p[1]-48)*2500))
+
+def adjacency(graph):
+    # Stops joined via geometry-only junctions count as adjacent iff the
+    # chosen line meets no other station in between. This is an UNDIRECTED
+    # *cartographic track* check; route direction remains in source chains.
+    byline=defaultdict(lambda:defaultdict(set))
+    for e in graph.edges:
+        for line in e.lines:
+            byline[line.id][e.src].add(e.dst)
+            byline[line.id][e.dst].add(e.src)
+    out={}
+    for lid,links in byline.items():
+        connected=set()
+        for station in graph.stations:
+            if station.id not in links:continue
+            todo=[station.id];seen={station.id}
+            while todo:
+                here=todo.pop()
+                for nxt in links[here]:
+                    if nxt in seen:continue
+                    seen.add(nxt)
+                    other=graph.nodes[nxt]
+                    if other.station_id:
+                        connected.add(tuple(sorted((station.station_id,other.station_id))))
+                    else:todo.append(nxt)
+        out[lid]=connected
+    return out
+
+def stage_review(graph,source):
+    byid={m["id"]:m for m in source["moments"]}
+    order={s["id"]:s["order"] for s in source["stages"]}
+    groups=defaultdict(list)
+    for node in graph.stations:groups[byid[node.station_id]["stageId"]].append(node.coord[0])
+    present=sorted(groups,key=lambda x:order[x])
+    bounds={sid:(min(xs),max(xs)) for sid,xs in groups.items()}
+    # Nodes may shift within their stage; no station may migrate to an earlier
+    # stage domain, and source ordinal order must stay left to right.
+    violations=[]
+    for left,right in zip(present,present[1:]):
+        if bounds[left][1]+4>=bounds[right][0]:
+            violations.append(f"interleaved stages {left} and {right}")
+    return {"preserved":not violations,"bounds":bounds,"violations":violations,
+            "present":present,"fullCanonicalStageCount":len(source["stages"])}
+
+def poly_review(graph):
+    bad=[]
+    for index,e in enumerate(graph.edges):
+        for a,b in zip(e.geometry,e.geometry[1:]):
+            dx=abs(a[0]-b[0]);dy=abs(a[1]-b[1])
+            if min(dx,dy)>3 and abs(dx-dy)>3:
+                bad.append({"edgeIndex":index,"dx":round(dx,2),"dy":round(dy,2)})
+    return {"octilinear":not bad,"violations":bad[:20],
+            "polylinePoints":sum(len(e.geometry) for e in graph.edges)}
+
+def native_geometry(seed,source,path,timeout):
+    geo=to_solver(seed).to_geojson()
+    path.with_suffix(".input.geojson").write_text(json.dumps(geo,indent=2)+"\n")
+    stages={}
+    for name in ["loom","octi"]:
+        geo=loom.run(name,geo,timeout=timeout)
+        path.with_suffix("."+name+".geojson").write_text(json.dumps(geo,indent=2)+"\n")
+        stages[name]={"featureCount":len(geo.get("features",[])),
+                      "hash":sha256(json.dumps(geo,sort_keys=True).encode()).hexdigest()}
+    solved=from_solver(LineGraph.from_geojson(geo))
+    source_pairs=adjacency(seed)
+    target_pairs=adjacency(solved)
+    lost={l:sorted(source_pairs[l]-target_pairs.get(l,set())) for l in source_pairs}
+    gained={l:sorted(target_pairs.get(l,set())-source_pairs[l]) for l in source_pairs}
+    equal=all(not x for x in lost.values()) and all(not x for x in gained.values())
+    expected={n.station_id for n in seed.stations}
+    actual={n.station_id for n in solved.stations}
+    stations=(expected==actual and len(expected)==len(solved.stations))
+    canonical_stage=stage_review(solved,source)
+    angles=poly_review(solved)
+    identities=set(solved.labels)=={line.label for line in LINES.values()}
+    accepted=equal and stations and identities and canonical_stage["preserved"] and angles["octilinear"]
+    proof={"attempted":True,"used":accepted,"steps":stages,
+           "adjacencyPreserved":equal,"stationIdentityPreserved":stations,
+           "lineIdentityPreserved":identities,"stageReview":canonical_stage,
+           "octilinearReview":angles,"lostStationLinePairs":lost,
+           "addedStationLinePairs":gained,
+           "geometryPolicy":"Use solver's exact edge polylines or reject; never re-elbow or guess transfers"}
+    return (solved if accepted else seed),proof
+
+def svg_with_stages(original,graph,source):
+    ET.register_namespace("","http://www.w3.org/2000/svg")
+    namespace="{http://www.w3.org/2000/svg}"
+    root=ET.fromstring(original)
+    circles=root.findall(".//"+namespace+"circle")
+    positions={c.attrib["data-station-id"]:(float(c.attrib["cx"]),float(c.attrib["cy"]))
+               for c in circles if c.attrib.get("data-station-id")}
+    assert len(positions)==23
+    # LOOM node IDs are *unstable* internal pointers. Resolve rendered label
+    # data-node references back to canonical station IDs before assigning LOD.
+    by_pointer={c.attrib.get("data-node"):c.attrib.get("data-station-id")
+                for c in circles if c.attrib.get("data-station-id")}
+    label_group=root.find(".//"+namespace+"g[@id='labels']")
+    if label_group is not None:
+        for el in label_group.findall(namespace+"text"):
+            canonical=by_pointer.get(el.attrib.get("data-node"))
+            if canonical:el.set("data-station-id",canonical)
+    # Compute transform from actual source to renderer's SVG positions, not
+    # pre-normalized assumptions or extra copies of station coordinates.
+    def fit(axis):
+        vals=[(n.coord[axis],positions[n.station_id][axis]) for n in graph.stations]
+        mx=sum(x for x,_ in vals)/len(vals);my=sum(y for _,y in vals)/len(vals)
+        a=sum((x-mx)*(y-my) for x,y in vals)/sum((x-mx)**2 for x,y in vals)
+        b=my-a*mx
+        err=max(abs(a*x+b-y) for x,y in vals)
+        if err>3:raise ValueError(f"nonaffine renderer transform {axis}: {err:.2f}")
+        return lambda x:a*x+b
+    px=fit(0)
+    byid={m["id"]:m for m in source["moments"]}
+    stages={s["id"]:s for s in source["stages"]}
+    groups=defaultdict(list)
+    for mid,(x,y) in positions.items():groups[byid[mid]["stageId"]].append(x)
+    ordering=sorted(groups,key=lambda sid:stages[sid]["order"])
+    ybase=min(y for _,y in positions.values())-75
+    top=ET.Element(namespace+"g",{"id":"stage-headings","aria-label":"Authored ordinal journey stages"})
+    for sid in ordering:
+        xs=groups[sid];center=(min(xs)+max(xs))/2
+        ET.SubElement(top,namespace+"text",{"x":f"{center:.2f}","y":f"{ybase:.2f}",
+              "text-anchor":"middle","fill":"#cfc1b5","font-size":"23",
+              "font-weight":"700"}).text=stages[sid]["shortName"]
+        ET.SubElement(top,namespace+"line",{"x1":f"{min(xs)-24:.2f}",
+              "x2":f"{min(xs)-24:.2f}","y1":f"{ybase+18:.2f}",
+              "y2":f"{max(y for _,y in positions.values())+42:.2f}",
+              "stroke":"#a69887","stroke-width":"1","stroke-dasharray":"3 14",
+              "opacity":"0.16"})
+    root.insert(1,top)
+    # Keep geometry stage guides on same canvas as native renderer.
+    box=[float(x) for x in root.attrib["viewBox"].split()]
+    topy=min(box[1],ybase-32)
+    right=max(box[0]+box[2],max(x for x,_ in positions.values())+180)
+    bottom=max(box[1]+box[3],max(y for _,y in positions.values())+100)
+    root.set("viewBox",f"{box[0]-20:.2f} {topy:.2f} {right-box[0]+40:.2f} {bottom-topy:.2f}")
+    root.set("id","metro")
+    root.set("role","img")
+    root.set("aria-label","Two source-backed pathway lines with shared trunk and branching")
+    root.attrib.pop("width",None);root.attrib.pop("height",None)
+    return ET.tostring(root,encoding="unicode")
+
+def page(svg,graph,source,audit):
+    full={m["id"]:m for m in source["moments"]}
+    conn={e["id"]:e for e in source["connections"]}
+    details={mid:{"id":mid,"label":full[mid]["label"],
+                  "stage":next(s["shortName"] for s in source["stages"] if s["id"]==full[mid]["stageId"]),
+                  "workstream":next(l["name"] for l in source["layers"] if l["id"]==full[mid]["layerId"]),
+                  "evidence":full[mid]["evidenceClass"],
+                  "evidenceRefPresent":full[mid]["evidenceRefPresent"],
+                  "links":[{"id":eid,"kind":conn[eid]["kind"],
+                            "from":conn[eid]["fromId"],"to":conn[eid]["toId"]}
+                           for eid in TRACK_IDS if mid in (conn[eid]["fromId"],conn[eid]["toId"])]}
+             for mid in SEEDS}
+    payload=json.dumps({"moments":details,"sourceEdges":TRACK_IDS,
+       "lines":{lid:{"name":l.label,"color":l.color} for lid,l in LINES.items()},
+       "audit":audit},separators=(",",":")).replace("<","\\u003c")
+    document=r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M-Journey | Cartographic line proof</title>
+<style>
+:root{font-family:Inter,system-ui,Arial,sans-serif;background:#191714;color:#f6ebde}
+*{box-sizing:border-box}body{margin:0}button{font:inherit;cursor:pointer}
+header{padding:17px 30px;border-bottom:1px solid #4e433a;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+small,.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b4a99d}
+h1{font-family:Georgia,serif;font-size:27px;font-weight:500;margin:3px 0 5px}
+.subtitle{font-size:13px;color:#beafa3}
+nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+nav button{cursor:pointer;border:1px solid #67574b;border-radius:3px;background:transparent;padding:6px 10px;color:#f5eadd;font:600 11px/1.25 Inter,Arial,sans-serif}
+nav button[aria-pressed="true"]{background:#f4e8d5;color:#241b15;border-color:#bca78c}
+nav button:hover{border-color:#c3ae95}
+nav button:focus-visible,button:focus-visible{outline:2px solid #f9c17b;outline-offset:2px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 278px;height:calc(100vh - 133px);min-height:565px}
+figure{margin:0;position:relative;overflow:hidden;background:#211b17}
+#metro{height:100%;width:100%;min-height:500px;display:block;touch-action:none;cursor:grab}
+#metro.grabbed{cursor:grabbing}
+#metro #lines g.line{transition:opacity .15s}
+#metro.focus #lines g.line:not(.selected-line){opacity:.075}
+#metro.focus #lines g.line.selected-line{opacity:1}
+#metro #stations circle{cursor:pointer;stroke-width:2.2}
+#metro #stations circle.selected-station{r:10;stroke:#fff9d1;stroke-width:4}
+#metro #labels text{paint-order:stroke;stroke:#211b17;stroke-width:3}
+#metro #labels text{opacity:0}
+#metro #labels text[data-station-id="eq31"],#metro #labels text[data-station-id="eq37"],#metro #labels text[data-station-id="eq39"],#metro #labels text[data-station-id="eq32"],#metro #labels text[data-station-id="eq33"]{opacity:1}
+#metro.all-labels #labels text{opacity:1}
+.figlegend{position:absolute;left:22px;bottom:15px;background:#1a1713e8;border:1px solid #5b4c40;border-radius:8px;padding:11px 14px;font-size:12px;max-width:500px}
+.key{display:inline-block;width:20px;height:5px;vertical-align:middle;margin:0 6px 1px 12px;border-radius:3px}
+.key:first-child{margin-left:0}
+aside{border-left:1px solid #54463c;padding:25px 20px;background:#191714;overflow:auto}
+aside h2{font-family:Georgia,serif;font-size:25px;font-weight:500;margin:10px 0 14px}
+aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
+.field{border-top:1px solid #493e35;padding-top:12px;margin-top:12px}
+.field small{display:block;margin-bottom:6px}
+.field b{font-size:13px;font-weight:500}
+.status{margin-top:18px;color:#c8b8a6;font-size:11px;line-height:1.45}
+@media(max-width:900px){header{padding:15px}nav{max-width:calc(100vw - 30px);flex-wrap:nowrap;overflow:auto;padding:8px 0}nav button{white-space:nowrap;flex-shrink:0}main{display:block;height:auto}figure{height:63vh;min-height:440px}#metro{min-height:440px}aside{border-left:0;border-top:1px solid #54463c;padding:15px;max-height:280px}.figlegend{bottom:8px;left:8px;max-width:calc(100% - 16px);font-size:10px}}
+</style></head><body>
+<header><div><div class="eyebrow">M-Journey · Cartographic proof</div>
+<h1>Shared pathways and authorized activity branches</h1>
+<div class="subtitle">23 research moments · 27 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div>
+<nav aria-label="Map focus">
+<button id="both" aria-pressed="true">Both lines</button>
+<button id="ae" aria-pressed="false">A&E / EPC</button>
+<button id="direct" aria-pressed="false">Direct customer</button>
+<button id="tech" aria-pressed="false">Technical review</button>
+<button id="finance" aria-pressed="false">Financial review</button>
+<button id="site" aria-pressed="false">Site readiness</button>
+<button id="logistics" aria-pressed="false">Logistics</button>
+<button id="labelToggle" aria-pressed="false">Labels</button>
+<button id="zoomIn" aria-label="Zoom in">+</button>
+<button id="zoomOut" aria-label="Zoom out">−</button>
+<button id="fit">Fit</button>
+<button id="fullscreen" aria-label="Full screen">⛶</button>
+</nav></header><main><figure id="frame">
+__SVG__
+<div class="figlegend"><span class="key" style="background:#ef6394"></span>A&E / EPC
+<span class="key" style="background:#36c9dc"></span>Direct customer
+<span class="key" style="background:#d2a458"></span>Technical
+<span class="key" style="background:#aa90e5"></span>Finance
+<span class="key" style="background:#58a58c"></span>Site
+<span class="key" style="background:#e4a070"></span>Logistics
+<div style="margin-top:7px;color:#beaea0">Parallel tracks share authored segments. Split at Funding authorized; rejoin at Vendor selected. No invented transfers.</div></div></figure>
+<aside id="inspector" aria-live="polite"><div class="eyebrow">Reading the map</div><h2>Shared journey, related activities</h2>
+<p>Two source-backed pathway alternatives share a main corridor. Four shorter branches represent related approval or readiness activities, not additional customer personas. Select a station for evidence and authored connections.</p>
+<div class="field"><small>Provenance</small><b>No synthetic customer moments, connections or interchanges</b></div>
+<div class="status" id="status">Solver review: __SOLVER__</div></aside></main>
+<script id="proof-data" type="application/json">__DATA__</script>
+<script>(()=>{"use strict";
+const data=JSON.parse(document.querySelector("#proof-data").textContent);
+const svg=document.querySelector("#metro"),ins=document.querySelector("#inspector");
+const lines=[...svg.querySelectorAll("#lines g[data-line]")];
+const buttons={both:document.querySelector("#both"),ae:document.querySelector("#ae"),direct:document.querySelector("#direct"),
+ tech:document.querySelector("#tech"),finance:document.querySelector("#finance"),
+ site:document.querySelector("#site"),logistics:document.querySelector("#logistics")};
+const groups={ae:"A&E / EPC mediated",direct:"Direct customer-led",
+ tech:"Technical approval review",finance:"Finance approval review",
+ site:"Site readiness branch",logistics:"Logistics readiness branch"};
+function focus(name){svg.classList.toggle("focus",name!=="both");
+  for(const [k,btn] of Object.entries(buttons))btn.setAttribute("aria-pressed",String(k===name));
+  for(const g of lines){g.classList.toggle("selected-line",name!=="both"&&g.dataset.line===groups[name])}
+}
+for(const name of Object.keys(buttons))buttons[name].onclick=()=>focus(name);
+document.querySelector("#labelToggle").onclick=e=>{
+const on=svg.classList.toggle("all-labels");e.currentTarget.setAttribute("aria-pressed",String(on));};
+const circles=[...svg.querySelectorAll("#stations circle[data-station-id]")];
+for(const c of circles)c.addEventListener("click",()=>{
+for(const other of circles)other.classList.toggle("selected-station",other===c);
+const m=data.moments[c.dataset.stationId];if(!m)return;
+ins.innerHTML='<div class="eyebrow">Research station '+m.id+'</div><h2>'+m.label+'</h2>'+
+'<div class="field"><small>Journey stage</small><b>'+m.stage+'</b></div>'+
+'<div class="field"><small>Research workstream</small><b>'+m.workstream+'</b></div>'+
+'<div class="field"><small>Research evidence</small><b>'+m.evidence+(m.evidenceRefPresent?' · reference available':' · no direct reference in fixture')+'</b></div>'+
+'<div class="field"><small>Authored edges</small><p>'+m.links.map(e=>e.id+' ('+e.kind+')').join(', ')+'</p></div>';
+});
+const vb=svg.viewBox.baseVal,home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
+function fit(){vb.x=home.x;vb.y=home.y;vb.width=home.w;vb.height=home.h}
+function zoom(k){let cx=vb.x+vb.width/2,cy=vb.y+vb.height/2;let w=Math.max(320,Math.min(home.w*1.7,vb.width*k));let h=w*svg.clientHeight/Math.max(1,svg.clientWidth);vb.x=cx-w/2;vb.y=cy-h/2;vb.width=w;vb.height=h}
+document.querySelector("#zoomIn").onclick=()=>zoom(.73);
+document.querySelector("#zoomOut").onclick=()=>zoom(1.3);
+document.querySelector("#fit").onclick=fit;
+document.querySelector("#fullscreen").onclick=()=>{let f=document.querySelector("#frame");document.fullscreenElement?document.exitFullscreen?.():f.requestFullscreen?.()};
+let drag=null;svg.addEventListener("pointerdown",e=>{if(e.target.closest("circle"))return;drag=[e.clientX,e.clientY];svg.setPointerCapture(e.pointerId);svg.classList.add("grabbed")});
+svg.addEventListener("pointermove",e=>{if(!drag)return;vb.x-=(e.clientX-drag[0])/svg.clientWidth*vb.width;vb.y-=(e.clientY-drag[1])/svg.clientHeight*vb.height;drag=[e.clientX,e.clientY]});
+svg.addEventListener("pointerup",()=>{drag=null;svg.classList.remove("grabbed")});
+svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.89)},{passive:false});
+fit();
+if(innerWidth<900)zoom(.40);
+})();</script></body></html>"""
+    return document.replace("__SVG__",svg).replace("__DATA__",payload).replace(
+      "__SOLVER__",html.escape(audit["solver"]["reviewStatus"]))
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--source",type=Path,default=ROOT/"fixtures/mjourney/equipment-sanitized-v1.json")
+    ap.add_argument("--output",type=Path,default=Path("out/cartographic-line-proof"))
+    ap.add_argument("--native-loom",action="store_true")
+    ap.add_argument("--timeout",type=int,default=240)
+    args=ap.parse_args()
+    source=json.loads(args.source.read_text())
+    moments,connections=source_records(source)
+    seed=assemble(source)
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    if args.native_loom:
+        graph,solver=native_geometry(seed,source,args.output,args.timeout)
+    else:
+        graph=seed
+        solver={"attempted":False,"used":False,"reviewStatus":"Deterministic seed geometry only; awaiting native LOOM review"}
+    if solver.get("attempted"):
+        solver["reviewStatus"]=("Native LOOM polylines preserved" if solver["used"] else
+                 "Native LOOM candidate REJECTED; displayed seed only")
+    assert adjacency(graph)==adjacency(seed)
+    assert {n.station_id for n in graph.stations}==set(SEEDS)
+    assert set(graph.labels)=={l.label for l in LINES.values()}
+    if solver.get("used"):assert poly_review(graph)["octilinear"]
+    # Use original Legible Cities renderer on accepted LOOM geometry, not a
+    # custom hand-built SVG track/path engine.
+    result=render(graph,width=2350,style=Style(
+        background="#211b17",station_fill="#fff4df",station_stroke_color="#211b17",
+        label_color="#fff4df",line_width=11,line_gap=1.45,station_radius=6.5,
+        interchange_radius=8.2,station_stroke=2.2,label_size=15,
+        label_offset=11,padding=40,themed=True
+       ),line_order=[l.label for l in LINES.values()],
+       colors={l.label:l.color for l in LINES.values()})
+    svg=svg_with_stages(result.svg,graph,source)
+    audit={"reviewStatus":"candidate semantic-cartographic proof; owner visual review required",
+      "canonical":{"moments":67,"authoredEdges":87,"edited":False},
+      "projection":{"displayMoments":len(seed.stations),"displayAuthoredConnections":len(TRACK_IDS),
+          "activeStages":stage_review(graph,source)["present"],"lineCount":len(LINES),
+          "sourceEdgeIds":TRACK_IDS,"sharedCorridorSourceEdges":SHARED_PREFIX+SHARED_SUFFIX,
+          "aePathSourceEdges":SHARED_PREFIX+AE+SHARED_SUFFIX,
+          "directPathSourceEdges":SHARED_PREFIX+DIRECT+SHARED_SUFFIX,
+          "singleCanonicalStationPerMoment":True,"approvedInterchanges":[],
+          "unapprovedSyntheticEdges":0,
+          "classification":"Candidate routes grounded in authored directed relationships, not customer travel validation"},
+      "solver":solver,"integrity":{"stationAdjacencyPreserved":adjacency(graph)==adjacency(seed),
+          "stagePreserved":stage_review(graph,source)["preserved"],
+          "lineIdentitiesPreserved":True,"nativePolylinesUsedVerbatim":bool(solver.get("used")),
+          "noTransitTimes":True},
+      "renderer":{"source":"schematic.render.render", "labelsDropped":result.dropped_labels}}
+    args.output.with_suffix(".svg").write_text(svg)
+    args.output.with_suffix(".html").write_text(page(svg,graph,source,audit))
+    args.output.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2)+"\n")
+    print(json.dumps({"output":str(args.output),"solver":solver,
+       "stations":len(graph.stations),"trackEdges":len(graph.edges),
+       "renderTracks":len(result.tracks),"labelsDropped":result.dropped_labels},indent=2))
+if __name__=="__main__":main()
