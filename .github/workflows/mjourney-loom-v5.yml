@@ -1,0 +1,47 @@
+name: M-Journey LOOM ordinal geometry proof
+on:
+  push:
+    branches: [feature/mjourney-loom-stage-v5]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  solve-and-render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies for native LOOM
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libglpk-dev coinor-libcbc-dev libzip-dev
+          python -m pip install -e '.[dev]'
+      - name: Build the connected LOOM source suite
+        run: |
+          git clone --quiet --depth 1 --recurse-submodules https://github.com/sss2808/loom.git /tmp/loom-source
+          cmake -S /tmp/loom-source -B /tmp/loom-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/loom-build --target topo loom octi -j 2
+          test -x /tmp/loom-build/topo
+          test -x /tmp/loom-build/loom
+          test -x /tmp/loom-build/octi
+          git -C /tmp/loom-source rev-parse HEAD > out-loom-commit.txt
+      - name: Run source provenance tests
+        run: python -m pytest -q tests/test_mjourney.py
+      - name: Solve topology, line ordering and octilinear geometry
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-loom-v5 --timeout 270 --output out/mjourney-equipment-loom-v5
+      - name: Archive real solver intermediates, validation and native render
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mjourney-loom-v5-geometry-review
+          path: |
+            out/mjourney-equipment-loom-v5.*
+            out-loom-commit.txt
+          retention-days: 14
+          if-no-files-found: warn
