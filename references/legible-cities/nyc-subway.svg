@@ -997,7 +997,8 @@
 <path id="t18_R" data-src="0xaaaac63b5f30" data-dst="0xaaaac63b61d0" d="M 853.96 1028.96 L 828.96 1053.96"/>
 <path id="t19_R" data-src="0xaaaac63b61d0" data-dst="0xaaaac6810300" d="M 828.96 1053.96 L 803.96 1078.96"/>
 <path id="t21_R" data-src="0xaaaac650a3a0" data-dst="0xaaaac7788c70" d="M 830.60 800.00 L 830.60 775.00"/>
-<path id="t22_R" data-src="0xaaaac650a3a0" data-dst="0xaaaac650a7d0" d="M 825.00 800.00 L 800.00 800.00"/><path id="t27_R" data-src="0xaaaac6575e50" data-dst="0xaaaac7c2e070" d="M 846.66 621.66 L 859.16 609.16"/>
+<path id="t22_R" data-src="0xaaaac650a3a0" data-dst="0xaaaac650a7d0" d="M 825.00 800.00 L 800.00 800.00"/>
+<path id="t27_R" data-src="0xaaaac6575e50" data-dst="0xaaaac7c2e070" d="M 846.66 621.66 L 859.16 609.16"/>
 <path id="t29_R" data-src="0xaaaac667a0a0" data-dst="0xaaaac633f4c0" d="M 750.00 875.00 L 773.68 898.68 L 774.04 899.04 L 774.33 899.32 L 774.58 899.54 L 774.79 899.71 L 774.99 899.83 L 775.19 899.91 L 775.41 899.96 L 775.65 899.99 L 775.94 900.00 L 776.29 900.00 L 776.32 900.00 L 825.00 900.00"/>
 <path id="t37_R" data-src="0xaaaac67054b0" data-dst="0xaaaac83113b0" d="M 1167.08 682.92 L 1154.58 670.42"/>
 <path id="t40_R" data-src="0xaaaac67055c0" data-dst="0xaaaac7535d90" d="M 1144.40 650.00 L 1144.40 625.00"/>
