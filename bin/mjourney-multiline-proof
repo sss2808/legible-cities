@@ -296,7 +296,8 @@ header{padding:17px 30px;border-bottom:1px solid #4e433a;display:flex;align-item
 small,.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#b4a99d}
 h1{font-family:Georgia,serif;font-size:27px;font-weight:500;margin:3px 0 5px}
 .subtitle{font-size:13px;color:#beafa3}
-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 30px;border-bottom:1px solid #4e433a;background:#191714}
+nav #zoomIn{margin-left:auto}
 nav button{cursor:pointer;border:1px solid #67574b;border-radius:3px;background:transparent;padding:6px 10px;color:#f5eadd;font:600 11px/1.25 Inter,Arial,sans-serif}
 nav button[aria-pressed="true"]{background:#f4e8d5;color:#241b15;border-color:#bca78c}
 nav button:hover{border-color:#c3ae95}
@@ -324,11 +325,11 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 .field small{display:block;margin-bottom:6px}
 .field b{font-size:13px;font-weight:500}
 .status{margin-top:18px;color:#c8b8a6;font-size:11px;line-height:1.45}
-@media(max-width:900px){header{padding:15px}nav{max-width:calc(100vw - 30px);flex-wrap:nowrap;overflow:auto;padding:8px 0}nav button{white-space:nowrap;flex-shrink:0}main{display:block;height:auto}figure{height:63vh;min-height:440px}#metro{min-height:440px}aside{border-left:0;border-top:1px solid #54463c;padding:15px;max-height:280px}.figlegend{bottom:8px;left:8px;max-width:calc(100% - 16px);font-size:10px}}
+@media(max-width:900px){header{padding:15px}nav{max-width:100vw;flex-wrap:nowrap;overflow:auto;padding:8px 15px}nav #zoomIn{margin-left:0}nav button{white-space:nowrap;flex-shrink:0}main{display:block;height:auto}figure{height:63vh;min-height:440px}#metro{min-height:440px}aside{border-left:0;border-top:1px solid #54463c;padding:15px;max-height:280px}.figlegend{bottom:8px;left:8px;max-width:calc(100% - 16px);font-size:10px}}
 </style></head><body>
 <header><div><div class="eyebrow">M-Journey · Cartographic proof</div>
 <h1>Shared pathways and authorized activity branches</h1>
-<div class="subtitle">23 research moments · 27 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div>
+<div class="subtitle">23 research moments · 27 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div></header>
 <nav aria-label="Map focus">
 <button id="both" aria-pressed="true">Both lines</button>
 <button id="ae" aria-pressed="false">A&E / EPC</button>
@@ -342,7 +343,7 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 <button id="zoomOut" aria-label="Zoom out">−</button>
 <button id="fit">Fit</button>
 <button id="fullscreen" aria-label="Full screen">⛶</button>
-</nav></header><main><figure id="frame">
+</nav><main><figure id="frame">
 __SVG__
 <div class="figlegend"><span class="key" style="background:#ef6394"></span>A&E / EPC
 <span class="key" style="background:#36c9dc"></span>Direct customer
