@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Experiment with documented octi configuration, NEVER altering source graph.
+
+All variants consume one frozen post-LOOM graph. A variant passes only when
+the P0a station/line adjacency, source layer/stage integrity, and weighted
+octilinearity are preserved. A passing configuration is *not* automatically
+chosen for the portfolio or product, and no source relationship is repaired.
+"""
+from __future__ import annotations
+
+import argparse
+from hashlib import sha256
+import json
+from pathlib import Path
+import runpy
+import sys
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from schematic import loom
+from schematic.linegraph import LineGraph
+from schematic.mjourney_projection import from_solver_point
+from schematic.mjourney_source_integrity import build_source_manifest, validate_projection_graph
+from schematic.render import octilinearity
+
+# Only documented native octi flags from the pinned fork.
+# These are experiments, not optimizer defaults for the product.
+VARIANTS={
+    "grid40": ["-g","40%"],
+    "grid15": ["-g","15%"],
+    "grid40_movement": ["-g","40%","--max-grid-dist","1",
+                       "--restr-loc-search","--nd-move-pen","10"],
+    "grid40_geo": ["-g","40%","--geo-pen","10","--nd-move-pen","10"],
+    "grid15_no_deg2": ["-g","15%","--no-deg2-heur"],
+}
+
+
+def review(name, graph, seed, source, manifest, helpers):
+    structural=validate_projection_graph(graph,manifest,require_source_edge_ids=False)
+    stage=helpers["stage_review"](graph,source)
+    expected=helpers["adjacency"](seed)
+    actual=helpers["adjacency"](graph)
+    deltas={}
+    for lid in sorted(set(expected)|set(actual)):
+        a,b=expected.get(lid,set()),actual.get(lid,set())
+        if a!=b:
+            deltas[lid]={"lost":[list(x) for x in sorted(a-b)],
+                         "added":[list(x) for x in sorted(b-a)]}
+    good,total=octilinearity(graph,tol_deg=1.0)
+    angle=good/total if total else 0.0
+    src_stations={n.station_id for n in seed.stations}
+    actual_stations={n.station_id for n in graph.stations}
+    src_lines={l.id for e in seed.edges for l in e.lines}
+    actual_lines={l.id for e in graph.edges for l in e.lines}
+    valid_stations=(actual_stations==src_stations
+                    and len(graph.stations)==len(seed.stations))
+    accepted=bool(structural["passed"] and stage["preserved"] and
+                  valid_stations and src_lines==actual_lines and
+                  not deltas and angle>=.995)
+    return {
+        "name":name,"accepted":accepted,"stationIdentityPreserved":valid_stations,
+        "lineIdentityPreserved":src_lines==actual_lines,
+        "perLineAdjacencyPreserved":not deltas,
+        "sourceAdjacencyChanges":deltas,
+        "stageOrderPreserved":stage["preserved"],
+        "stageViolations":stage["violations"],
+        "weightedOctilinearity":round(angle,8),
+        "minimumWeightedOctilinearity":0.995,
+        "postSolverStructuralAuditPassed":structural["passed"],
+        "directedSourceAuthority":"frozen P0a manifest, not reconstructed from solver",
+        "stationCount":len(graph.stations),"edgeCount":len(graph.edges),
+    }
+
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--source",type=Path,
+                    default=ROOT/"fixtures/mjourney/equipment-sanitized-v1.json")
+    ap.add_argument("--loom",type=Path,required=True)
+    ap.add_argument("--output",type=Path,required=True)
+    ap.add_argument("--timeout",type=int,default=120)
+    args=ap.parse_args()
+    raw=args.source.read_bytes();source=json.loads(raw)
+    helpers=runpy.run_path(str(ROOT/"bin/mjourney-system-network"))
+    manifest=build_source_manifest(source,helpers["ROUTES"],source_bytes=raw)
+    lock=json.loads((ROOT/"fixtures/mjourney/equipment-source-certificate-lock-v7.json").read_text())
+    assert manifest["sourceBytesSha256"]==lock["sourceBytesSha256"]
+    assert manifest["semanticSha256"]==lock["sourceSemanticSha256"]
+    seed=helpers["assemble"](source)
+    initial=json.loads(args.loom.read_text())
+    frozen_hash=sha256(args.loom.read_bytes()).hexdigest()
+    output={"schema":"mjourney-octi-constraint-probe/v1",
+            "inputLoomSha256":frozen_hash,
+            "sourceSemanticSha256":manifest["semanticSha256"],
+            "semanticWarning":"11 colored routes are the V7 diagnostic, not final authored layer-line semantics",
+            "variants":{},
+            "selectedCandidate":None,
+            "noAutoPromotion":True}
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    for name,flags in VARIANTS.items():
+        record={"flags":flags}
+        try:
+            candidate=loom.run("octi",initial,*flags,timeout=args.timeout)
+            outfile=args.output.with_name(f"{args.output.stem}.{name}.geojson")
+            outfile.write_text(json.dumps(candidate,indent=2,sort_keys=True)+"\n")
+            graph=LineGraph.from_geojson(candidate).reproject(from_solver_point)
+            record.update(review(name,graph,seed,source,manifest,helpers))
+            record["candidateFile"]=outfile.name
+            record["candidateSha256"]=sha256(outfile.read_bytes()).hexdigest()
+        except Exception as exc:
+            # Experimental candidates may fail optimization; retain the failure
+            # as a diagnostic, do not silently substitute seed geometry.
+            record.update({"accepted":False,"error":str(exc)[:1300]})
+        output["variants"][name]=record
+        args.output.write_text(json.dumps(output,indent=2,sort_keys=True)+"\n")
+        print(json.dumps({"name":name,"accepted":record["accepted"],
+             "adjacency":record.get("perLineAdjacencyPreserved"),
+             "stage":record.get("stageOrderPreserved"),
+             "octilinearity":record.get("weightedOctilinearity"),
+             "error":record.get("error")}))
+    accepted=[name for name,r in output["variants"].items() if r["accepted"]]
+    output["acceptedCandidatesForOwnerReview"]=accepted
+    output["requiresVisualAndProductSemanticReview"]=True
+    args.output.write_text(json.dumps(output,indent=2,sort_keys=True)+"\n")
+    print("SOURCE-CONSTRAINED CONFIGURATION CANDIDATES:",accepted)
+
+
+if __name__=="__main__":
+    main()
