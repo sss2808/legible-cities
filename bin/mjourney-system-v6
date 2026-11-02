@@ -332,7 +332,7 @@ aside .field small{display:block;color:#b7a394;margin-bottom:6px;font-size:11px}
 aside p,aside li{color:#d2c3b7;line-height:1.5;font-size:13px}
 aside ul{padding-left:18px}aside .chip{display:inline-block;border:1px solid #57483e;border-radius:30px;padding:4px 7px;font-size:11px}
 footer{padding:9px 28px;border-top:1px solid #42392f;background:#171310;color:#a99a8b;font-size:11px}
-@media(max-width:900px){header{padding:15px;gap:12px}.legend{padding:9px 13px}main{display:block}.mapbox,#map{min-height:440px;height:58vh}aside{border-left:0;border-top:1px solid #4f4239;max-height:330px;padding:15px}.note{bottom:8px;left:8px;max-width:calc(100% - 16px)}}
+@media(max-width:900px){header{padding:15px;gap:10px;display:block}h1{font-size:23px}.controls{display:flex;flex-wrap:nowrap;overflow-x:auto;max-width:calc(100vw - 30px);gap:6px;padding:13px 0 4px;scrollbar-width:thin}.controls button,.controls input{white-space:nowrap;flex-shrink:0}.legend{padding:9px 13px;flex-wrap:nowrap;overflow-x:auto;max-width:100vw;white-space:nowrap;scrollbar-width:thin}.legend button{white-space:nowrap;flex-shrink:0}main{display:block}.mapbox,#map{min-height:500px;height:66vh}aside{border-left:0;border-top:1px solid #4f4239;max-height:330px;padding:15px}.note{bottom:8px;left:8px;max-width:calc(100% - 16px)}}
 </style></head><body><div class="shell">
 <header><div><div class="eyebrow">M-Journey / System view</div><h1>Equipment buying journey</h1><div class="subtitle">67 research moments · 10 authored stages · source-connected network</div></div>
 <div class="controls" aria-label="Map controls">
@@ -444,6 +444,7 @@ svg.addEventListener('pointermove',e=>{if(!drag)return;vb.x-=(e.clientX-drag.px)
 svg.addEventListener('pointerup',()=>{drag=null;svg.classList.remove('dragging')});
 svg.addEventListener('wheel',e=>{e.preventDefault();let p=point(e);zoom(e.deltaY>0?1.17:.86,p.x,p.y)},{passive:false});
 svg.addEventListener('dblclick',()=>fit());fit();
+if(window.matchMedia('(max-width:900px)').matches){zoom(.35,home.x+home.w*.08,home.y+home.h*.50);svg.classList.add('details')}
 })();
 </script></body></html>""".replace("__SVG__",svg).replace("__DATA__",payload)
 
