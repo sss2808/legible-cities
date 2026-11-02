@@ -1,0 +1,100 @@
+name: M-Journey V8 native stage-by-stage topology audit
+on:
+  push:
+    branches: [feature/mjourney-v8-p0b-stage-differential]
+  pull_request:
+    branches: [feature/mjourney-v8-p0b-exact-metric-bridge]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  controlled-differential-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: Run graph-stage differential regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_mjourney_native_stage_diff.py' -v
+          python -m unittest discover -s tests -p 'test_mjourney_v8_metric_integration.py' -v
+          python -m unittest discover -s tests -p 'test_mjourney_source_integrity.py' -v
+
+  pinned-native-stage-diff:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install native solver requirements
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libglpk-dev coinor-libcbc-dev libzip-dev
+          python -m pip install -e .
+      - name: Build exact pinned loom and octi (never topo)
+        run: |
+          git clone --quiet --depth 1 --recurse-submodules https://github.com/sss2808/loom.git /tmp/loom-source
+          git -C /tmp/loom-source checkout --detach 1e4757838104d1e4d22186c9b77d5fc4b98681a0
+          git -C /tmp/loom-source submodule update --init --recursive
+          cmake -S /tmp/loom-source -B /tmp/loom-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/loom-build --target loom octi -j 2
+          mkdir -p out
+          git -C /tmp/loom-source rev-parse HEAD > out/stage-diff-loom-commit.txt
+      - name: Execute native solver against original immutable 59/68 projection
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+          SCHEMATIC_LOOM_COMMIT: 1e4757838104d1e4d22186c9b77d5fc4b98681a0
+        run: |
+          python bin/mjourney-system-network --native-loom --timeout 420 \
+            --output out/stage-diff-native
+      - name: Compare source, post-loom, post-octi semantic topology
+        run: |
+          python bin/mjourney-native-stage-diff \
+            --input out/stage-diff-native.input.geojson \
+            --loom out/stage-diff-native.loom.geojson \
+            --octi out/stage-diff-native.octi.geojson \
+            --output out/stage-diff-report.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report=json.loads(Path("out/stage-diff-report.json").read_text())
+          a=json.loads(Path("out/stage-diff-native.audit.json").read_text())
+          assert report["schema"]=="mjourney-native-stage-differential/v1"
+          assert report["stages"]["input"]["semanticAudit"]["passed"]
+          assert report["stages"]["input"]["stations"]==59
+          assert report["stages"]["input"]["perLineAdjacencyPreserved"]
+          assert report["sourceSemanticSha256"]==a["sourceCertificate"]["semanticSha256"]
+          assert report["nativeAccepted"]==a["solver"]["used"], (
+              "Differential and existing native gate must agree",report["nativeAccepted"],a["solver"]["used"])
+          print("FIRST HARD GATE FAILURE:",report["firstHardGateFailure"])
+          print("SAVED STAGE-BY-STAGE DIAGNOSTICS")
+          PY
+      - name: Native source integrity acceptance gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("out/stage-diff-report.json").read_text())
+          a=json.loads(Path("out/stage-diff-native.audit.json").read_text())
+          assert a["solver"]["attempted"]
+          assert a["solver"]["coordinateBridge"]=="exact_synthetic_web_mercator_pr6"
+          assert a["solver"]["topologyStageEnabled"] is False
+          if not (a["solver"]["used"] and r["nativeAccepted"]):
+              raise SystemExit("NATIVE REJECTED. Inspect the first failed stage in stage-diff-report.json")
+          print("NATIVE GRAPH, STAGE AND ANGLE ACCEPTANCE PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-p0b-stage-diff-source-loom-octi
+          path: |
+            out/stage-diff-*.json
+            out/stage-diff-native.*
+            out/stage-diff-loom-commit.txt
+          retention-days: 30
