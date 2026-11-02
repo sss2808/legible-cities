@@ -1,0 +1,91 @@
+name: M-Journey exact Mercator coordinate proof
+on:
+  push:
+    branches: [feature/mjourney-mercator-projection-audit]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-seed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - name: Exact Web Mercator and source identity unit tests
+        run: python -m unittest discover -s tests -p test_mjourney_projection.py -v
+      - name: Verify source topology, line occupancy, native SVG baseline
+        run: |
+          python bin/mjourney-multiline-proof --output out/multiline-seed
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("out/multiline-seed.audit.json").read_text())
+          assert a["canonical"]=={"moments":67,"authoredEdges":87,"edited":False}
+          assert a["projection"]["displayMoments"]==23
+          assert a["projection"]["displayAuthoredConnections"]==25
+          assert len(a["projection"]["sharedCorridorSourceEdges"])==11
+          assert a["projection"]["lineCount"]==6
+          assert a["integrity"]["stationAdjacencyPreserved"]
+          assert a["integrity"]["stagePreserved"]
+          h=Path("out/multiline-seed.html").read_text()
+          assert 'id="metro"' in h
+          assert 'id="stage-headings"' in h
+          assert "NaN:NaN" not in h and "0 trains" not in h
+          print("REA expanded network: 23 moments, 25 source edges, six real line identities")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-mercator-seed
+          path: out/multiline-seed.*
+          retention-days: 14
+  real-loom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native C++ LOOM dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libglpk-dev coinor-libcbc-dev libzip-dev
+          python -m pip install -e .
+      - name: Exact Web Mercator tests on the native solver runner
+        run: python -m unittest discover -s tests -p test_mjourney_projection.py -v
+      - name: Build actual original LOOM tools
+        run: |
+          git clone --quiet --depth 1 --recurse-submodules https://github.com/sss2808/loom.git /tmp/loom-source
+          cmake -S /tmp/loom-source -B /tmp/loom-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/loom-build --target loom octi -j 2
+          test -x /tmp/loom-build/loom
+          test -x /tmp/loom-build/octi
+          git -C /tmp/loom-source rev-parse HEAD > out-loom-commit.txt
+      - name: Run native LOOM line ordering and octilinear solver
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-multiline-proof --native-loom --timeout 270 --output out/multiline-native
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("out/multiline-native.audit.json").read_text())
+          assert a["projection"]["displayMoments"]==23
+          assert a["integrity"]["stationAdjacencyPreserved"]
+          assert a["integrity"]["stagePreserved"]
+          assert a["solver"]["attempted"] and a["solver"]["used"], "Do not approve seed fallback as optimized native LOOM geometry"
+          print("LOOM disposition:",a["solver"]["reviewStatus"])
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-mercator-native
+          path: |
+            out/multiline-native.*
+            out-loom-commit.txt
+          retention-days: 14

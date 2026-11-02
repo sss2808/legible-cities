@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"src"))
 from schematic import loom
 from schematic.linegraph import Edge, Line, LineGraph, Node
-from schematic.render import Style, render
+from schematic.render import Style, render, octilinearity
 
 LINES={
   "ae_epc_mediated":Line("ae_epc_mediated","A&E / EPC mediated","#ef6394"),
@@ -114,21 +114,17 @@ def assemble(source):
                                         "traversable":True}))
     return LineGraph(nodes,drawn)
 
-# Native LOOM works in geographic input but optimizes 45-degree angles in a
-# locally projected metric plane. Longitude degrees at latitude 48° are shorter
-# than latitude degrees by cos(48°). Never treat lon/lat degrees as isotropic
-# screen coordinates, or valid LOOM diagonals look 1.49:1 after reprojecting.
-_LOCAL_LONGITUDE_SCALE=math.cos(math.radians(48.0))
+# Use the same *exact* Web Mercator projection as Legible Cities.
+# The anchor is synthetic: stage positions remain ordinal diagram coordinates.
+from schematic.mjourney_projection import from_solver_point, to_solver_point
 
 def to_solver(graph):
-    """Stage-constrained seed into a local metric-equivalent lon/lat domain."""
-    return graph.reproject(lambda p:(8+p[0]/(2500*_LOCAL_LONGITUDE_SCALE),
-                                      48+p[1]/2500))
+    """Feed LOOM synthetic lon/lat with true isotropic projected geometry."""
+    return graph.reproject(to_solver_point)
 
 def from_solver(graph):
-    """Restore the same local metric axes without rebuilding solver polylines."""
-    return graph.reproject(lambda p:((p[0]-8)*2500*_LOCAL_LONGITUDE_SCALE,
-                                      (p[1]-48)*2500))
+    """Return *every* optimizer vertex to diagram units without re-routing."""
+    return graph.reproject(from_solver_point)
 
 def adjacency(graph):
     # Stops joined via geometry-only junctions count as adjacent iff the
@@ -174,14 +170,21 @@ def stage_review(graph,source):
             "present":present,"fullCanonicalStageCount":len(source["stages"])}
 
 def poly_review(graph):
-    bad=[]
-    for index,e in enumerate(graph.edges):
-        for a,b in zip(e.geometry,e.geometry[1:]):
-            dx=abs(a[0]-b[0]);dy=abs(a[1]-b[1])
-            if min(dx,dy)>3 and abs(dx-dy)>3:
-                bad.append({"edgeIndex":index,"dx":round(dx,2),"dy":round(dy,2)})
-    return {"octilinear":not bad,"violations":bad[:20],
+    """Use the original renderer's length-weighted projected-angle diagnostic.
+
+    Tiny rounding stubs from LOOM's lon/lat GeoJSON must not dominate the
+    test, but a significant total length at non-45-degree angles must fail.
+    The graph has already been restored to *isotropic* diagram coordinates
+    through the exact Mercator inverse in mjourney_projection.
+    """
+    correct, total = octilinearity(graph, tol_deg=1.0)
+    fraction = correct / total if total else 0.0
+    return {"octilinear":fraction >= 0.995,
+            "lengthWeightedFraction":round(fraction,8),
+            "minimumAcceptedFraction":0.995,
+            "angleToleranceDegrees":1.0,
             "polylinePoints":sum(len(e.geometry) for e in graph.edges)}
+
 
 def native_geometry(seed,source,path,timeout):
     geo=to_solver(seed).to_geojson()
