@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-02  
 **Status:** Additional design reference for [PR #4](https://github.com/sss2808/legible-cities/pull/4); unapproved experimental analysis, not a new M-Journey implementation or evidence of research routes.  
-**Provenance:** Six user-provided SVG files exported from Legible Cities: `trimet-max.svg`, `sf-muni-metro.svg`, `nyc-subway.svg`, `septa-regional-rail.svg`, `chicago-l.svg`, `cdmx-metro.svg`. Their content was inspected programmatically and visually. The SVG files themselves have not been copied into this repository. See also [LA Metro REA deep dive](MJOURNEY_REA_LA_METRO_DEEP_DIVE_2026-11-02.md).
+**Provenance:** Six user-provided SVG files exported from Legible Cities: `trimet-max.svg`, `sf-muni-metro.svg`, `nyc-subway.svg`, `septa-regional-rail.svg`, `chicago-l.svg`, `cdmx-metro.svg`. Their content was inspected programmatically and visually. All six source SVGs are now committed under [the Legible Cities reference folder](../references/legible-cities/README.md), with their original generated paths and station/line metadata preserved. See also [LA Metro REA deep dive](MJOURNEY_REA_LA_METRO_DEEP_DIVE_2026-11-02.md).
 
 ## Decision
 
@@ -18,6 +18,19 @@ For immediate visual engineering, prioritize:
 6. **SEPTA Regional Rail** as a *negative shape comparison*: many route identities radiating from shared central territory while using a uniform route color, demonstrating that line count or colors do not by themselves convey research structure.
 
 The shape should emerge from M-Journey's authorized research topology, not be copied from any transit network. Our 10 ordinal stages are not transit geography or elapsed time. Do not force a loop, star, hub, or transfer to imitate a reference.
+
+## Download and inspect the original SVG sources
+
+The following are **actual vector files**, not screenshots or recreated images:
+
+- [Mexico City Metro](../references/legible-cities/cdmx-metro.svg)
+- [San Francisco Muni Metro](../references/legible-cities/sf-muni-metro.svg)
+- [Chicago L](../references/legible-cities/chicago-l.svg)
+- [New York City Subway](../references/legible-cities/nyc-subway.svg)
+- [TriMet MAX](../references/legible-cities/trimet-max.svg)
+- [SEPTA Regional Rail](../references/legible-cities/septa-regional-rail.svg)
+
+The [reference folder index](../references/legible-cities/README.md) records provenance, priorities and the permitted engineering use. The SVGs retain native `g[data-line]` and path `data-src`/`data-dst` for programmatic geometry studies.
 
 ## Parsed SVG inventory
 
@@ -69,4 +82,4 @@ The following advice is supported by transit-map/cartographic research, not by t
 
 ## Scope of approval
 
-This document is reference research and acceptance criteria only. It makes **no changes to the M-Journey research fixture, the product, the portfolio, or any map renderer**. The six attached SVGs are not republished to GitHub. Do not merge or deploy draft PRs from this finding alone.
+This document is reference research and acceptance criteria only. It makes **no changes to the M-Journey research fixture, the product, the portfolio, or any map renderer**. The six owner-provided reference SVGs are committed on this **unmerged draft branch** for research and code comparison, not incorporated into the portfolio or product. Check SVG-generated output and agency data reuse permissions before external redistribution. Do not merge or deploy draft PRs from this finding alone.
