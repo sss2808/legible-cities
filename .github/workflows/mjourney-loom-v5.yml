@@ -8,7 +8,7 @@ permissions:
 jobs:
   solve-and-render:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,6 +35,12 @@ jobs:
           SCHEMATIC_LOOM_BIN: /tmp/loom-build
         run: |
           python bin/mjourney-loom-v5 --timeout 270 --output out/mjourney-equipment-loom-v5
+      - name: Solve independently authored source transitions for geometry comparison
+        continue-on-error: true
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-loom-v5 --mode source --timeout 270 --output out/mjourney-equipment-source-network-v5
       - name: Archive real solver intermediates, validation and native render
         if: always()
         uses: actions/upload-artifact@v4
@@ -42,6 +48,7 @@ jobs:
           name: mjourney-loom-v5-geometry-review
           path: |
             out/mjourney-equipment-loom-v5.*
+            out/mjourney-equipment-source-network-v5.*
             out-loom-commit.txt
           retention-days: 14
           if-no-files-found: warn
