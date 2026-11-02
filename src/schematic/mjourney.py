@@ -407,3 +407,167 @@ def build_network_projection(data: dict, *, full: bool = False) -> JourneyProjec
             "editorialPathReview": audit_editorial_paths(data),
         },
     )
+
+
+def build_system_v3(data: dict) -> JourneyProjection:
+    """Native Legible Cities System map with continuous *category* lines.
+
+    This projection deliberately does NOT use source relationships as colored
+    transit segments. One source moment yields one stationary node, assigned
+    only to its authored layer; each line continuously presents category
+    membership, and every display guide is explicitly non-traversable unless
+    its two endpoints have a direct approved source connection (currently none
+    of the 87 have been individually approved as travel).
+
+    Canonical connections, authored path branches and the lifecycle return are
+    preserved in the audit for interpretation and later route emphasis.
+    """
+    moments, connections, stages, layers = _validate(data)
+    ordered_stages = sorted(stages.values(), key=lambda s: s["order"])
+    ordered_layers = sorted(layers.values(), key=lambda l: l["order"])
+    stage_order = {s["id"]: i for i, s in enumerate(ordered_stages)}
+    layer_order = {l["id"]: i for i, l in enumerate(ordered_layers)}
+    # Ten ordinal stage domains; widths reflect label/station density, never months.
+    stage_counts = [
+        sum(m["stageId"] == stage["id"] for m in moments.values())
+        for stage in ordered_stages
+    ]
+    widths = [max(175., 140. + 22. * n) for n in stage_counts]
+    bounds = [70.]
+    for width in widths:
+        bounds.append(bounds[-1] + width)
+    # Natural bends replace rigid swimlane rows. Stage/line anchors are
+    # presentation geometry, not measured data or inferred relationships.
+    # The waves are deterministic and preserve the seven line identities.
+    import math
+    center = (len(ordered_layers) - 1) / 2
+    category_y = {}
+    for li, layer in enumerate(ordered_layers):
+        for si, stage in enumerate(ordered_stages):
+            drift = 42 * math.sin(si * .72 + li * .56)
+            # Stations may visually cluster into corridors around procurement.
+            pull = (13 if si in (4, 5, 6) else 0) * (center - li)
+            category_y[(layer["id"], stage["id"])] = (
+                150 + li * 104 + drift + pull
+            )
+
+    # All 67 authored moments retain their stage, identity, and one sourced
+    # layer membership. The slot allocation avoids coincident moment markers.
+    membership = {layer["id"]: [] for layer in ordered_layers}
+    by_bucket: dict[tuple[str, str], list[str]] = {}
+    for mid, m in moments.items():
+        membership[m["layerId"]].append(mid)
+        by_bucket.setdefault((m["stageId"], m["layerId"]), []).append(mid)
+    positions = {}
+    for mid, m in moments.items():
+        ids = by_bucket[(m["stageId"], m["layerId"])]
+        slot = ids.index(mid)
+        n = len(ids)
+        stage = stage_order[m["stageId"]]
+        # Use the same x for all memberships in a stage only if their
+        # individual slot differs; y stays distinct between categories.
+        x = bounds[stage] + widths[stage] * (slot + 1) / (n + 1)
+        y = category_y[(m["layerId"], m["stageId"])]
+        positions[mid] = (x, y)
+
+    # Native nodes and edges go through the original render/animate engine.
+    nodes = {
+        mid: Node(
+            id=mid, coord=positions[mid], station_id=mid,
+            station_label=m["label"],
+            props={
+                "sourceMomentId": mid, "stageId": m["stageId"],
+                "layerIds": [m["layerId"]],
+                "evidenceRefPresent": m["evidenceRefPresent"],
+                "projectionRole": "canonical-research-moment",
+            },
+        )
+        for mid, m in moments.items()
+    }
+    lines = [
+        Line(id=l["id"], label=l["name"], color=l["color"])
+        for l in ordered_layers
+    ]
+    edges = []
+    guide_audit = []
+    source_pairs: dict[tuple[str, str], list[str]] = {}
+    for e in connections.values():
+        source_pairs.setdefault((e["fromId"], e["toId"]), []).append(e["id"])
+
+    for line in lines:
+        mids = sorted(membership[line.id],
+                      key=lambda mid: (stage_order[moments[mid]["stageId"]],
+                                       positions[mid][0], mid))
+        for prev, nxt in zip(mids, mids[1:]):
+            # A colored line is an organizational membership guide only.
+            # It NEVER automatically becomes a verified traversable route.
+            relationship_ids = source_pairs.get((prev, nxt), [])
+            geom = _octilinear(positions[prev], positions[nxt])
+            edges.append(Edge(
+                src=prev, dst=nxt, geometry=geom, lines=[line],
+                props={
+                    "projectionRole": "non-traversable-category-guide",
+                    "traversable": False,
+                    "layerId": line.id, "sourceEdgeIds": relationship_ids,
+                },
+            ))
+            guide_audit.append({
+                "fromId": prev, "toId": nxt, "layerId": line.id,
+                "disposition": "non-traversable-category-guide",
+                "directAuthoredConnectionIds": relationship_ids,
+            })
+
+    graph = LineGraph(nodes=nodes, edges=edges)
+    path_branches: dict[str, list[str]] = {}
+    for e in connections.values():
+        if e["routeId"] not in ("all", None, ""):
+            path_branches.setdefault(e["routeId"], []).append(e["id"])
+    stage_ranges = [
+        {
+            "id": stage["id"], "name": stage["shortName"],
+            "fullName": stage["name"], "startX": bounds[i],
+            "endX": bounds[i+1],
+        }
+        for i, stage in enumerate(ordered_stages)
+    ]
+    return JourneyProjection(
+        graph=graph,
+        stages=ordered_stages,
+        layers=ordered_layers,
+        audit={
+            "schema": "mjourney-system-layout-v3",
+            "journeyId": data["journeyId"],
+            "semantics": "Seven continuous category membership lines; NOT customer travel",
+            "canonical": {
+                "momentCount": len(moments), "connectionCount": len(connections),
+                "stageCount": len(stages), "layerCount": len(layers),
+                "sourceEdgeIds": list(connections),
+            },
+            "projection": {
+                "mode": "system-v3",
+                "stationIds": list(nodes),
+                "stationCoords": {id_: list(n.coord) for id_, n in nodes.items()},
+                "stageRanges": stage_ranges,
+                "lineMemberships": {
+                    key: list(values) for key, values in membership.items()
+                },
+                "lines": [
+                    {"id": l.id, "name": l.label, "color": l.color,
+                     "kind": "category"}
+                    for l in lines
+                ],
+                "guideCount": len(edges),
+                "nonTraversableGuides": len(edges),
+                "traversableGuides": 0,
+                "inferredTransfers": 0,
+                "sourcePathBranches": path_branches,
+                "lifecycleReturnIds": [
+                    e["id"] for e in connections.values()
+                    if e["kind"] == "lifecycle_return"
+                ],
+                "positionsDeterministic": True,
+                "stageDistanceMeansElapsedTime": False,
+            },
+            "guides": guide_audit,
+        },
+    )
