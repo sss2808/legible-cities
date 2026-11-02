@@ -28,6 +28,9 @@ def main():
                     default=ROOT / "fixtures/mjourney/equipment-sanitized-v1.json")
     ap.add_argument("--v7-script", type=Path, default=ROOT / "bin/mjourney-system-network")
     ap.add_argument("--output", type=Path, default=Path("out/mjourney-source-certificate.json"))
+    ap.add_argument("--lock", type=Path,
+                    default=ROOT / "fixtures/mjourney/equipment-source-certificate-lock-v7.json",
+                    help="Frozen source/projection baseline, not generated from current input")
     ap.add_argument("--candidate", type=Path, help="Optional additional graph GeoJSON to inspect")
     ap.add_argument("--post-solver", action="store_true",
                     help="Allow geometry helper nodes; reports direction as unverifiable")
@@ -40,6 +43,21 @@ def main():
     routes = v7["ROUTES"]
     manifest = build_source_manifest(source, routes, source_bytes=raw)
     canonical = verify_source_manifest(source, manifest, routes, source_bytes=raw)
+    lock = json.loads(args.lock.read_text(encoding="utf-8"))
+    expected = {
+        "schema": "mjourney-p0a-source-lock/v1",
+        "sourceBytesSha256": manifest["sourceBytesSha256"],
+        "sourceSemanticSha256": manifest["semanticSha256"],
+        "canonicalCounts": manifest["canonicalCounts"],
+        "projectionCounts": manifest["projectionCounts"],
+    }
+    lock_errors = [f"{key}: frozen value differs from the source projection"
+                   for key, value in expected.items() if lock.get(key) != value]
+    if lock.get("sourceFixture") != "fixtures/mjourney/equipment-sanitized-v1.json":
+        lock_errors.append("source fixture lock path changed")
+    frozen = {"passed": not lock_errors, "errors": lock_errors,
+              "sourceBytesSha256": manifest["sourceBytesSha256"],
+              "sourceSemanticSha256": manifest["semanticSha256"]}
     seed = v7["assemble"](source)
     seed_review = validate_projection_graph(seed, manifest)
     candidate_review = None
@@ -51,6 +69,7 @@ def main():
     result = {
         "manifest": manifest,
         "canonicalReview": canonical,
+        "frozenBaselineReview": frozen,
         "v7SeedReview": seed_review,
         "candidateReview": candidate_review,
         "nativeOptimizationAttempted": False,
@@ -64,10 +83,11 @@ def main():
         "sourceBytesSha256": manifest["sourceBytesSha256"],
         "counts": manifest["projectionCounts"],
         "canonicalPassed": canonical["passed"],
+        "frozenBaselinePassed": frozen["passed"],
         "seedPassed": seed_review["passed"],
         "candidatePassed": None if candidate_review is None else candidate_review["passed"],
     }, indent=2))
-    if not canonical["passed"] or not seed_review["passed"]:
+    if not canonical["passed"] or not seed_review["passed"] or not frozen["passed"]:
         raise SystemExit(1)
     if candidate_review is not None and not candidate_review["passed"]:
         raise SystemExit(2)
