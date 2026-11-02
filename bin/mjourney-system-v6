@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""M-Journey System: typed research topology, stage-constrained geometric layout,
+original Legible Cities SVG renderer, zero transit/timetable user interface.
+LOOM is an optional geometry proposal ONLY: it can never add or remove a
+source research connection. No map geography or elapsed time is inferred.
+"""
+import collections
+import json
+import math
+import argparse
+import html
+import sys
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from schematic.linegraph import LineGraph, Node, Edge, Line
+from schematic.mjourney import _octilinear
+from schematic.render import Style, render
+from schematic import loom
+
+KINDS={"sequence","branch","convergence","handoff"}
+
+def route(edges, start, end, *, avoid=None):
+    graph=collections.defaultdict(list)
+    for e in edges:
+        if e["kind"] in KINDS and e["id"]!=avoid:
+            graph[e["fromId"]].append(e)
+    todo=collections.deque([(start,[])])
+    seen=set()
+    while todo:
+        at,path=todo.popleft()
+        if at==end:return path
+        if at in seen:continue
+        seen.add(at)
+        for e in graph[at]:todo.append((e["toId"],path+[e["id"]]))
+    raise ValueError(f"no source-backed directed path: {start} -> {end}")
+
+def stage_layout(source):
+    moments={m["id"]:m for m in source["moments"]}
+    stages=sorted(source["stages"],key=lambda s:s["order"])
+    ordered=collections.defaultdict(list)
+    for m in source["moments"]:ordered[m["stageId"]].append(m["id"])
+    # Initial order is a presentation preference; never replace source stage.
+    rank={"layer-1":0, "layer-5":1, "layer-4":2, "layer-0":3,
+          "layer-2":4, "layer-3":5, "layer-6":6}
+    for st in stages:
+        ids=ordered[st["id"]]
+        ids.sort(key=lambda mid:(rank.get(moments[mid]["layerId"],3),int(mid[2:])))
+    adjacency=collections.defaultdict(list)
+    for e in source["connections"]:
+        if e["kind"] not in KINDS:continue
+        if e["fromId"] in moments and e["toId"] in moments:
+            adjacency[e["fromId"]].append(e["toId"])
+            adjacency[e["toId"]].append(e["fromId"])
+    # Sugiyama-style sweeps: order stations using canonical edges, not category guides.
+    for k in range(12):
+        sweep=stages if k%2 else list(reversed(stages))
+        positions={mid:i/max(1,len(ids)-1) for ids in ordered.values() for i,mid in enumerate(ids)}
+        for st in sweep:
+            ids=ordered[st["id"]]
+            old={mid:i for i,mid in enumerate(ids)}
+            def bary(mid):
+                nearby=[positions[j] for j in adjacency[mid]
+                        if moments[j]["stageId"]!=moments[mid]["stageId"]]
+                if not nearby:return old[mid]/max(1,len(ids)-1)
+                return 0.72*sum(nearby)/len(nearby)+0.28*old[mid]/max(1,len(ids)-1)
+            ids.sort(key=lambda mid:(bary(mid),old[mid],mid))
+    widths={}
+    starts={};x=120.0
+    for stage in stages:
+        count=len(ordered[stage["id"]])
+        width=max(300.0,220.0+count*31.0)
+        starts[stage["id"]]=x
+        widths[stage["id"]]=width
+        x+=width+56.0
+    loc={}
+    for stage in stages:
+        ids=ordered[stage["id"]]
+        count=len(ids)
+        # Fixed ordinal stage bounds, flexible station density. No duration.
+        pitch=min(94.0,980/max(count-1,1))
+        for i,mid in enumerate(ids):
+            source_position=next(j for j,m in enumerate(source["moments"]) if m["id"]==mid)
+            same_stage_source=[m["id"] for m in source["moments"] if m["stageId"]==stage["id"]]
+            slot=same_stage_source.index(mid)
+            a=starts[stage["id"]];w=widths[stage["id"]]
+            xx=a+40+(w-80)*(slot+1)/(count+1)
+            yy=665+(i-(count-1)/2)*pitch
+            loc[mid]=(xx,yy)
+    bounds=[dict(id=s["id"],name=s["shortName"],fullName=s["name"],
+                 startX=starts[s["id"]],endX=starts[s["id"]]+widths[s["id"]]) for s in stages]
+    return loc,bounds
+
+def graph_of(source,positions):
+    layers={l["id"]:l for l in source["layers"]}
+    moments={m["id"]:m for m in source["moments"]}
+    nodes={mid:Node(id=mid,coord=positions[mid],station_id=mid,
+                    station_label=m["label"],props={"stageId":m["stageId"],
+                  "layerId":m["layerId"],"sourceMomentId":mid})
+           for mid,m in moments.items()}
+    lines={lid:Line(id=lid,label=l["name"],color=l["color"]) for lid,l in layers.items()}
+    edges=[]
+    for item in source["connections"]:
+        if item["kind"] not in KINDS:continue
+        a,b=item["fromId"],item["toId"]
+        origin=moments[a]["layerId"]
+        edges.append(Edge(src=a,dst=b,geometry=_octilinear(positions[a],positions[b]),
+                          lines=[lines[origin]],props={"sourceEdgeIds":[item["id"]],
+                          "sourceKind":item["kind"],"sourceRouteId":item["routeId"],
+                          "projectionRole":"canonical-authored-connection",
+                          "traversable":True}))
+    return LineGraph(nodes=nodes,edges=edges)
+
+def pairs(graph):
+    # This compares directed endpoint identities and edge multiplicity, rather
+    # than treating any path through a synthetic vertex as a researched step.
+    counts=collections.Counter()
+    for e in graph.edges:
+        if graph.nodes[e.src].station_id and graph.nodes[e.dst].station_id:
+            counts[(graph.nodes[e.src].station_id,graph.nodes[e.dst].station_id,
+                    tuple(x.id for x in e.lines))]+=1
+    return counts
+
+def native_hint(source,graph,path,enabled):
+    if not enabled:return graph,{"attempted":False,"used":False,"reason":"disabled"}
+    # Optional LOOM route ordering/geometry, without topology aggregation, on
+    # the exact research graph. Accept only if all authored direct adjacencies
+    # survive; otherwise source geometry remains authoritative.
+    seed=graph.to_geojson()
+    adjusted=json.loads(json.dumps(seed))
+    # LOOM operates on geographic-sized coordinates; these are synthetic.
+    for feature in adjusted["features"]:
+        geo=feature["geometry"]
+        if geo["type"]=="Point":
+            x,y=geo["coordinates"];geo["coordinates"]=[8+x/5000,48+y/5000]
+        elif geo["type"]=="LineString":
+            geo["coordinates"]=[[8+x/5000,48+y/5000] for x,y in geo["coordinates"]]
+    try:
+        out=loom.run("loom",adjusted,timeout=160)
+        path.with_suffix(".loom.geojson").write_text(json.dumps(out,indent=2))
+        octi=loom.run("octi",out,timeout=160)
+        path.with_suffix(".octi.geojson").write_text(json.dumps(octi,indent=2))
+        candidate=LineGraph.from_geojson(octi)
+        original_ids={n.station_id for n in graph.stations}
+        solved_ids={n.station_id for n in candidate.stations}
+        if original_ids!=solved_ids:
+            return graph,{"attempted":True,"used":False,"reason":"station identity changes",
+                          "expected":len(original_ids),"actual":len(solved_ids)}
+        # The native tools can insert geometry-only junctions and merge edges.
+        # Reject unless the full direct source edge ID set can be proven.
+        # Station positions MAY be adopted, but only with stage re-projection;
+        # original edges still come from graph_of() above, never LOOM edges.
+        y_values=[n.coord[1] for n in candidate.stations];lo,hi=min(y_values),max(y_values)
+        candidate_by_id={n.station_id:n for n in candidate.stations}
+        positions={}
+        for mid,n in graph.nodes.items():
+            old=n.coord
+            # Preserve x/stage hard constraint, optimize only rank in y.
+            sy=candidate_by_id[mid].coord[1]
+            positions[mid]=(old[0],250+830*(sy-lo)/max(hi-lo,0.0000001))
+        rebuilt=graph_of(source,positions)
+        if pairs(rebuilt)!=pairs(graph):
+            raise ValueError("edge identity or source adjacency changed")
+        return rebuilt,{"attempted":True,"used":True,
+                        "role":"LOOM-derived vertical order; canonical edges reconstructed",
+                        "sourceEdgesPreserved":len(graph.edges),
+                        "authoritative":"M-Journey authored connections, not LOOM topology"}
+    except Exception as exc:
+        return graph,{"attempted":True,"used":False,
+                      "reason":str(exc)[:350],"fallback":"source-authored topology"}
+
+def supplementary(svg,source,graph,bounds):
+    # Overlay stage guides with the SAME camera as the schematic.
+    import xml.etree.ElementTree as ET
+    ET.register_namespace("","http://www.w3.org/2000/svg")
+    root=ET.fromstring(svg)
+    ns="{http://www.w3.org/2000/svg}"
+    # Original renderer labels link through data-node rather than station IDs.
+    ptr={e.attrib.get("data-node"):e.attrib.get("data-station-id")
+         for e in root.findall(".//"+ns+"circle") if e.attrib.get("data-station-id")}
+    moments={m["id"]:m for m in source["moments"]}
+    for label in root.findall(".//"+ns+"g[@id='labels']/"+ns+"text"):
+        mid=ptr.get(label.attrib.get("data-node"))
+        if mid:
+            label.set("data-station-id",mid)
+            label.set("class","key-label" if moments[mid].get("key") else "detail-label")
+    box=[float(x) for x in root.get("viewBox").split()]
+    # Stage header on map canvas; headings pan and zoom with stations.
+    upper=box[1]-105
+    layers=ET.Element(ns+"g",{"id":"journey-stage-guides","aria-label":"Ten authored stages"})
+    for st in bounds:
+        x1=st["startX"];x2=st["endX"];xm=(x1+x2)/2
+        line=ET.SubElement(layers,ns+"line",{"x1":str(x1),"x2":str(x1),
+                 "y1":str(upper+48),"y2":str(box[1]+box[3]-45),
+                 "stroke":"#5c514a","stroke-width":"1","stroke-dasharray":"2 13",
+                 "opacity":"0.38"})
+        ET.SubElement(layers,ns+"text",{"x":str(xm),"y":str(upper+30),
+                  "fill":"#d9d0c4","font-size":"19","font-weight":"650",
+                  "text-anchor":"middle","letter-spacing":"0.2"}).text=st["name"]
+    root.insert(1,layers)
+    # Lifecycle return has distinct relationship semantics, not a forward path.
+    source_by={e["id"]:e for e in source["connections"]}
+    lifecycle=[e for e in source["connections"] if e["kind"]=="lifecycle_return"]
+    if lifecycle:
+        station_by={n.station_id:n for n in graph.stations}
+        e=lifecycle[0];a=station_by[e["fromId"]].coord;b=station_by[e["toId"]].coord
+        bottom=max(n.coord[1] for n in graph.stations)+140
+        overlay=ET.SubElement(root,ns+"g",{"id":"research-return","data-kind":"lifecycle_return"})
+        ET.SubElement(overlay,ns+"path",{"d":f"M {a[0]:.2f} {a[1]:.2f} V {bottom:.2f} H {b[0]:.2f} V {b[1]:.2f}",
+                  "stroke":"#ac9a88","stroke-width":"2.2","stroke-dasharray":"7 10",
+                  "fill":"none","opacity":"0.58"})
+        ET.SubElement(overlay,ns+"text",{"x":str((a[0]+b[0])/2),"y":str(bottom-13),
+                  "text-anchor":"middle","fill":"#b2a496","font-size":"14"}).text="Lifecycle feedback"
+    # Avoid clipped headings/return in the original viewBox.
+    new_top=min(upper-5,box[1]);bottom=max(n.coord[1] for n in graph.stations)+185
+    new_bottom=max(box[1]+box[3],bottom)
+    root.set("viewBox",f"{box[0]-40:.2f} {new_top:.2f} {box[2]+80:.2f} {new_bottom-new_top:.2f}")
+    root.set("role","img")
+    root.set("aria-label","Equipment buying source-connected systems schematic")
+    root.set("preserveAspectRatio","xMidYMid meet")
+    root.attrib.pop("width",None);root.attrib.pop("height",None)
+    return ET.tostring(root,encoding="unicode")
+
+def page(svg,source,bounds,projection,model):
+    # The journey-specific HTML intentionally does NOT import animate.texts.
+    # Thus train schedules, clocks, passenger journeys and date pickers cannot appear.
+    moments={m["id"]:m for m in source["moments"]}
+    connections=source["connections"]
+    common=route(connections,"eq01","eq31")
+    end=route(connections,"eq37","eq39")
+    ae=common+["edge44","edge48","edge49","edge50"]+end
+    direct=common+["edge45","edge51","edge52"]+end
+    payload=json.dumps({"moments":source["moments"],"connections":connections,
+            "layers":source["layers"],"stages":source["stages"],
+            "branches":{"ae":ae,"direct":direct},"bounds":bounds,"geometry":projection},
+            separators=(",",":")).replace("<","\\u003c")
+    return """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M-Journey | Equipment buying system</title>
+<style>
+:root{font-family:Inter,Arial,sans-serif;color:#eee5dc;background:#141210}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}
+.shell{min-height:100vh;display:flex;flex-direction:column}
+header{padding:18px 29px 15px;background:#191613;border-bottom:1px solid #453d36;display:flex;gap:26px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.eyebrow{font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:#b5a79a}
+h1{font-family:Georgia,serif;font-weight:500;font-size:25px;margin:2px 0 4px}
+.subtitle{color:#c4b5a6;font-size:12px}
+.controls{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+button{background:#29231e;color:#eaded3;border:1px solid #655444;border-radius:8px;padding:8px 11px}
+button:hover,button:focus-visible{border-color:#f2e6ce;outline:2px solid transparent}
+button.active{background:#f1e7d6;color:#211a16;border-color:#f1e7d6}
+button:focus-visible,input:focus-visible{outline:2px solid #e9b56c}
+input{color:#eee5dc;background:#27221d;border:1px solid #665b4d;border-radius:7px;padding:9px 11px;width:175px}
+.legend{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:10px 30px;border-bottom:1px solid #3c342e;background:#191613}
+.legend button{background:transparent;border:1px solid transparent;font-size:11px;padding:5px 8px}
+.legend button.off{opacity:.32}.legend i{display:inline-block;width:16px;height:5px;border-radius:5px;margin-right:6px;vertical-align:middle}
+main{display:grid;grid-template-columns:minmax(0,1fr) 288px;flex:1;min-height:560px}
+.mapbox{position:relative;background:#221c17;min-height:570px;overflow:hidden}
+#map{width:100%;height:100%;min-height:570px;touch-action:none;display:block;cursor:grab}
+#map.dragging{cursor:grabbing}
+#map #labels .detail-label{display:none}
+#map.details #labels .detail-label{display:inline}
+#map #lines path{transition:opacity .16s;cursor:pointer}
+#map #stations circle{cursor:pointer;transition:r .12s,opacity .12s}
+#map.focus #lines path:not(.highlight){opacity:.095}
+#map.focus #lines path.highlight{stroke-width:14;opacity:1}
+#map.focus #stations circle:not(.highlight){opacity:.26}
+#map.focus #stations circle.highlight{r:9;stroke-width:2.6}
+#map #lines g.muted{opacity:.09}
+#map #labels text{paint-order:stroke;stroke:#221c17;stroke-width:3px;stroke-linejoin:round}
+#map .selected{stroke:#fff4ce!important;stroke-width:4!important;r:12}
+#map #research-return{pointer-events:none}
+.note{position:absolute;bottom:17px;left:20px;font-size:11px;color:#c4b5a6;background:#171310cb;padding:9px 12px;border:1px solid #4e4136;border-radius:8px;max-width:510px}
+aside{border-left:1px solid #4f4239;background:#191613;padding:24px 18px 30px;overflow:auto}
+aside h2{font-family:Georgia,serif;font-size:24px;font-weight:500;line-height:1.2;margin:10px 0 14px}
+aside .field{border-top:1px solid #443a32;padding:12px 0}
+aside .field small{display:block;color:#b7a394;margin-bottom:6px;font-size:11px}
+aside p,aside li{color:#d2c3b7;line-height:1.5;font-size:13px}
+aside ul{padding-left:18px}aside .chip{display:inline-block;border:1px solid #57483e;border-radius:30px;padding:4px 7px;font-size:11px}
+footer{padding:9px 28px;border-top:1px solid #42392f;background:#171310;color:#a99a8b;font-size:11px}
+@media(max-width:900px){header{padding:15px;gap:12px}.legend{padding:9px 13px}main{display:block}.mapbox,#map{min-height:440px;height:58vh}aside{border-left:0;border-top:1px solid #4f4239;max-height:330px;padding:15px}.note{bottom:8px;left:8px;max-width:calc(100% - 16px)}}
+</style></head><body><div class="shell">
+<header><div><div class="eyebrow">M-Journey / System view</div><h1>Equipment buying journey</h1><div class="subtitle">67 research moments · 10 authored stages · source-connected network</div></div>
+<div class="controls" aria-label="Map controls">
+<button class="active" id="scope" type="button" aria-pressed="true">System</button>
+<button id="overview" type="button">Overview labels</button>
+<button id="all" type="button">All labels</button>
+<button id="ae" type="button">A&E / EPC pathway</button>
+<button id="direct" type="button">Direct customer pathway</button>
+<input type="search" id="search" aria-label="Search research moments" placeholder="Find a moment">
+<button id="zoomOut" type="button" aria-label="Zoom out">−</button>
+<button id="zoomIn" type="button" aria-label="Zoom in">+</button>
+<button id="fit" type="button">Fit</button>
+<button id="fullscreen" type="button" aria-label="Full screen">⛶</button>
+</div></header>
+<div class="legend" id="legend" aria-label="Research workstreams">
+<span class="eyebrow">Workstreams</span></div>
+<main><section class="mapbox" id="mapbox">
+__SVG__
+<div class="note">Every solid segment connects two authored moments. Colors indicate the originating workstream. Dashed return indicates lifecycle feedback, not elapsed time.</div>
+</section><aside id="inspector" aria-live="polite">
+<div class="eyebrow">Inspect the system</div><h2>Connected buying journey</h2>
+<p>Select any station to see its authored relationships, stage and evidence classification.</p>
+<div class="field"><small>Reading the map</small><p>Branches and convergences follow source IDs. Workstream color is an attribute, not a separate invented journey or approved transfer.</p></div>
+</aside></main>
+<footer>Research topology: 67 moments · 87 relationships · 83 displayed sequence, branch, convergence and handoff edges · 3 dependencies kept in source data · 1 lifecycle return shown separately. No schedule or durations.</footer>
+</div><script id="data" type="application/json">__DATA__</script>
+<script>
+(()=>{'use strict';
+const data=JSON.parse(document.getElementById('data').textContent);
+const svg=document.getElementById('map'),inspector=document.getElementById('inspector');
+const momentBy=Object.fromEntries(data.moments.map(m=>[m.id,m]));
+const layerBy=Object.fromEntries(data.layers.map(l=>[l.id,l]));
+const stageBy=Object.fromEntries(data.stages.map(s=>[s.id,s]));
+const edgesByPair=new Map();
+for(const e of data.connections){let k=e.fromId+'|'+e.toId;let a=edgesByPair.get(k)||[];a.push(e);edgesByPair.set(k,a)}
+const stationEls=Array.from(svg.querySelectorAll('#stations [data-station-id]'));
+const pointer=Object.fromEntries(stationEls.map(el=>[el.getAttribute('data-node'),el.getAttribute('data-station-id')]));
+const tracks=Array.from(svg.querySelectorAll('#lines path'));
+tracks.forEach(el=>{
+ let from=pointer[el.getAttribute('data-src')],to=pointer[el.getAttribute('data-dst')];
+ let set=edgesByPair.get(from+'|'+to)||edgesByPair.get(to+'|'+from)||[];
+ if(set.length){el.dataset.edgeId=set[0].id;el.dataset.sourceKind=set[0].kind}
+});
+const vb=svg.viewBox.baseVal,home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
+const fit=()=>{vb.x=home.x;vb.y=home.y;vb.width=home.w;vb.height=home.h};
+const zoom=(factor,x,y)=>{
+ x=x??vb.x+vb.width/2;y=y??vb.y+vb.height/2;
+ let nw=Math.min(home.w*1.3,Math.max(300,vb.width*factor));
+ let nh=nw*svg.clientHeight/Math.max(1,svg.clientWidth);
+ nh=Math.max(130,Math.min(home.h*1.6,nh));
+ vb.x=x-(x-vb.x)*nw/vb.width;vb.y=y-(y-vb.y)*nh/vb.height;vb.width=nw;vb.height=nh;
+ svg.classList.toggle('details',nw<home.w*.67);
+};
+const controls=['ae','direct','overview','all'];
+const activate=id=>controls.forEach(c=>document.getElementById(c).classList.toggle('active',c===id));
+const clear=()=>{svg.classList.remove('focus');tracks.forEach(e=>e.classList.remove('highlight'));stationEls.forEach(e=>e.classList.remove('highlight'));activate('overview')};
+const focus=(name)=>{
+ let ids=new Set(data.branches[name]);svg.classList.add('focus');
+ let stationIds=new Set();
+ for(const e of data.connections)if(ids.has(e.id)){stationIds.add(e.fromId);stationIds.add(e.toId)}
+ tracks.forEach(e=>e.classList.toggle('highlight',ids.has(e.dataset.edgeId)));
+ stationEls.forEach(e=>e.classList.toggle('highlight',stationIds.has(e.dataset.stationId)));
+ activate(name);
+ inspector.innerHTML='<div class="eyebrow">Source-backed pathway</div><h2>'+(name==='ae'?'A&E / EPC mediated':'Direct customer-led')+'</h2><p>Directed trace from the first business need through funding, the divergent vendor-selection branch and purchase order. Shared segments remain highlighted.</p><div class="field"><small>Research edges</small><p>'+ids.size+' authored connections · divergent at eq31 · reconvergent at eq37</p></div>';
+};
+document.getElementById('ae').onclick=()=>focus('ae');
+document.getElementById('direct').onclick=()=>focus('direct');
+document.getElementById('overview').onclick=()=>{clear();svg.classList.remove('details')};
+document.getElementById('all').onclick=()=>{clear();svg.classList.add('details');activate('all')};
+document.getElementById('fit').onclick=fit;
+document.getElementById('zoomIn').onclick=()=>zoom(.73);
+document.getElementById('zoomOut').onclick=()=>zoom(1.35);
+document.getElementById('fullscreen').onclick=()=>{let el=document.getElementById('mapbox');if(!document.fullscreenElement)el.requestFullscreen?.();else document.exitFullscreen?.()};
+document.getElementById('search').addEventListener('input',e=>{
+ let q=e.target.value.toLowerCase().trim();if(!q)return;
+ let m=data.moments.find(m=>m.label.toLowerCase().includes(q)||m.id.includes(q));
+ if(m)select(m.id);
+});
+function select(id){
+ let m=momentBy[id];if(!m)return;
+ svg.querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));
+ let marker=stationEls.find(el=>el.dataset.stationId===id);if(marker)marker.classList.add('selected');
+ let linked=data.connections.filter(e=>e.fromId===id||e.toId===id);
+ const kind=linked.map(e=>'<li><strong>'+e.id+'</strong> '+e.kind+' · '+(e.fromId===id?'to '+momentBy[e.toId].label:'from '+momentBy[e.fromId].label)+'</li>').join('');
+ inspector.innerHTML='<div class="eyebrow">Research moment '+id+'</div><h2>'+m.label+'</h2>'
+ +'<div class="field"><small>Stage</small><span class="chip">'+stageBy[m.stageId].shortName+'</span></div>'
+ +'<div class="field"><small>Primary workstream</small><span class="chip">'+layerBy[m.layerId].name+'</span></div>'
+ +'<div class="field"><small>Evidence classification</small><p>'+(m.evidenceClass||'Not specified')+(m.evidenceRefPresent?' · Reference present':' · No direct reference in this fixture')+'</p></div>'
+ +'<div class="field"><small>Authored relationships ('+linked.length+')</small><ul>'+kind+'</ul></div>';
+}
+stationEls.forEach(e=>{e.addEventListener('click',ev=>{ev.stopPropagation();select(e.dataset.stationId)})});
+tracks.forEach(e=>e.addEventListener('click',()=>{let src=data.connections.find(x=>x.id===e.dataset.edgeId);if(src)select(src.fromId)}));
+const legend=document.getElementById('legend');
+data.layers.forEach(l=>{
+ let btn=document.createElement('button');btn.type='button';btn.innerHTML='<i style="background:'+l.color+'"></i>'+l.name;
+ btn.setAttribute('aria-pressed','true');
+ btn.onclick=()=>{btn.classList.toggle('off');let on=!btn.classList.contains('off');
+ btn.setAttribute('aria-pressed',String(on));
+ svg.querySelectorAll('#lines g[data-line]').forEach(g=>{if(g.dataset.line===l.name)g.classList.toggle('muted',!on)})};
+ legend.append(btn);
+});
+let drag=null;
+function point(ev){let r=svg.getBoundingClientRect();return {x:vb.x+(ev.clientX-r.left)/r.width*vb.width,y:vb.y+(ev.clientY-r.top)/r.height*vb.height}}
+svg.addEventListener('pointerdown',e=>{if(e.target.closest('#stations'))return;drag={px:e.clientX,py:e.clientY};svg.setPointerCapture(e.pointerId);svg.classList.add('dragging')});
+svg.addEventListener('pointermove',e=>{if(!drag)return;vb.x-=(e.clientX-drag.px)/svg.clientWidth*vb.width;vb.y-=(e.clientY-drag.py)/svg.clientHeight*vb.height;drag.px=e.clientX;drag.py=e.clientY});
+svg.addEventListener('pointerup',()=>{drag=null;svg.classList.remove('dragging')});
+svg.addEventListener('wheel',e=>{e.preventDefault();let p=point(e);zoom(e.deltaY>0?1.17:.86,p.x,p.y)},{passive:false});
+svg.addEventListener('dblclick',()=>fit());fit();
+})();
+</script></body></html>""".replace("__SVG__",svg).replace("__DATA__",payload)
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--source",default="fixtures/mjourney/equipment-sanitized-v1.json")
+    p.add_argument("--output",default="out/mjourney-system-v6")
+    p.add_argument("--loom",action="store_true",help="Test native LOOM geometry proposal with strict source rehydration")
+    args=p.parse_args()
+    source=json.loads(Path(args.source).read_text())
+    stages=sorted(source["stages"],key=lambda s:s["order"])
+    assert len(stages)==10 and len(source["moments"])==67 and len(source["connections"])==87
+    loc,bounds=stage_layout(source)
+    graph=graph_of(source,loc)
+    output=Path(args.output);output.parent.mkdir(parents=True,exist_ok=True)
+    expected=[e for e in source["connections"] if e["kind"] in KINDS]
+    assert len(expected)==83 and len(graph.edges)==83 and len(graph.stations)==67
+    graph,proposal=native_hint(source,graph,output,args.loom)
+    assert pairs(graph)==pairs(graph_of(source,loc)),"CRITICAL: source edge topology changed"
+    style=Style(background="#221c17",station_fill="#fff5e5",station_stroke_color="#251b16",
+        label_color="#f6ede2",line_width=7,line_gap=1.5,station_radius=4.5,
+        interchange_radius=6,station_stroke=2,label_size=13,label_offset=12,padding=30)
+    layers=sorted(source["layers"],key=lambda l:l["order"])
+    palette={l["name"]:l["color"] for l in layers}
+    result=render(graph,width=2850,style=style,
+                  line_order=[l["name"] for l in layers],colors=palette)
+    svg=supplementary(result.svg,source,graph,bounds)
+    output.with_suffix(".svg").write_text(svg)
+    output.with_suffix(".html").write_text(page(svg,source,bounds,proposal,"system"))
+    audit={"view":"System", "timetableControls":False, "renderEngine":"original Legible Cities schematic.render",
+           "canonical":{"moments":67,"connections":87,"renderedAuthoredEdges":83,
+                "dependencies":3,"lifecycleReturns":1,"stages":10,"layers":7},
+           "geometry":{"stageConstraints":"hard left-to-right ordinal windows","loom":proposal,
+                       "sourceEdgePairPreserved":True, "noInferredInterchanges":True,
+                       "stages":bounds},"render":{"droppedLabels":result.dropped_labels,
+                       "svg":output.with_suffix(".svg").name,
+                       "html":output.with_suffix(".html").name},
+           "paths":{"aeEpc":route(source["connections"],"eq01","eq31")+["edge44","edge48","edge49","edge50"]+route(source["connections"],"eq37","eq39"),
+                    "direct":route(source["connections"],"eq01","eq31")+["edge45","edge51","edge52"]+route(source["connections"],"eq37","eq39")}}
+    output.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2))
+    print(json.dumps({"status":"rendered","stations":len(graph.stations),
+         "renderedSourceEdges":len(graph.edges),"droppedLabels":len(result.dropped_labels),
+         "loom":proposal},indent=2))
+if __name__=="__main__":main()
