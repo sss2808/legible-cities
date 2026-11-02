@@ -514,122 +514,237 @@ __SVG__
 const data=JSON.parse(document.querySelector("#map-data").textContent);
 const svg=document.querySelector("#metro"),frame=document.querySelector("#frame");
 const route=document.querySelector("#routeFocus"),layer=document.querySelector("#layerFocus");
+const linear=document.querySelector("#linear"),rows=document.querySelector("#linearRows");
 const ins=document.querySelector("#inspector"),insBody=document.querySelector("#inspectorBody");
 const circles=[...svg.querySelectorAll("#stations circle[data-station-id]")];
 const labels=[...svg.querySelectorAll("#labels text[data-station-id]")];
 const groups=[...svg.querySelectorAll("#lines g[data-line]")];
-const vb=svg.viewBox.baseVal,home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
-let expandedLabels=false,selectedId=null;
-function setView(x,y,w,h){vb.x=x;vb.y=y;vb.width=w;vb.height=h;updateLabels()}
-function fit(){setView(home.x,home.y,home.w,home.h)}
-function fitStations(ids){
- const cs=circles.filter(c=>ids.has(c.dataset.stationId));
- if(!cs.length){fit();return}
- const xs=cs.map(c=>+c.getAttribute("cx")),ys=cs.map(c=>+c.getAttribute("cy"));
- const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
- let w=Math.max(270,maxx-minx+210),h=Math.max(235,maxy-miny+195);
- const aspect=frame.clientWidth/Math.max(1,frame.clientHeight);
- if(w/h<aspect)w=h*aspect;else h=w/aspect;
- setView((minx+maxx-w)/2,(miny+maxy-h)/2,w,h);
+const vb0=svg.getAttribute("viewBox").split(/\s+/).map(Number);
+const home={x:vb0[0],y:vb0[1],w:vb0[2],h:vb0[3]};
+let view={...home},baseline={...home},mode="schematic";
+let expandedLabels=false,linearStep=140,selectedId=null,drag=null;
+const allStations=new Set(circles.map(c=>c.dataset.stationId));
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const stationIndex=new Map(circles.map(c=>[c.dataset.stationId,c]));
+const anchors=new Set(["eq01","eq10","eq16","eq31","eq37","eq39","eq59","eq64","eq67"]);
+function mapAspect(){
+ const b=svg.getBoundingClientRect();
+ return Math.max(.35,b.width/Math.max(1,b.height));
+}
+function unionBoxes(items){
+ let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+ for(const el of items){
+  if(!el||getComputedStyle(el).display==="none")continue;
+  let r;try{r=el.getBBox()}catch(_){continue}
+  if(!r||!Number.isFinite(r.x+r.y+r.width+r.height))continue;
+  if(r.width===0&&r.height===0)continue;
+  left=Math.min(left,r.x);top=Math.min(top,r.y);
+  right=Math.max(right,r.x+r.width);bottom=Math.max(bottom,r.y+r.height);
+ }
+ if(!Number.isFinite(left))return {x:home.x,y:home.y,w:home.w,h:home.h};
+ return {x:left,y:top,w:Math.max(1,right-left),h:Math.max(1,bottom-top)};
+}
+function selection(){
+ const key=route.value,layerId=layer.value;
+ const routeIds=key==="all"?allStations:new Set(data.routes[key].stationIds);
+ const layerIds=new Set(circles.filter(c=>layerId==="all"||c.dataset.layer===layerId)
+   .map(c=>c.dataset.stationId));
+ const both=new Set([...routeIds].filter(id=>layerIds.has(id)));
+ return {key,layerId,ids:both.size?both:routeIds};
+}
+function visibleContentBox(full=false){
+ const state=selection(),all=full||(state.key==="all"&&state.layerId==="all");
+ const members=all?allStations:state.ids;
+ const visibleTracks=groups.filter(g=>full||state.key==="all"||g.dataset.line===data.routes[state.key].name);
+ const items=[...visibleTracks,...circles.filter(c=>members.has(c.dataset.stationId))];
+ if(all){
+  items.push(...svg.querySelectorAll("#stage-headings text,#research-layer-guides text"));
+ }
+ // Labels belong in the same camera as their tracks when they are shown.
+ items.push(...labels.filter(t=>members.has(t.dataset.stationId)&&
+   getComputedStyle(t).opacity!=="0"&&t.style.opacity!=="0"));
+ return unionBoxes(items);
+}
+function fitBox(box,{focus=false}={}){
+ const aspect=mapAspect();
+ const padX=Math.max(38,box.w*.075),padY=Math.max(55,box.h*.09);
+ // Short route subsets are allowed to occupy much of the frame, not become
+ // microscopic or jump to a 10x close-up.
+ const minimum=focus?baseline.w*.45:0;
+ const w=Math.max(box.w+2*padX,(box.h+2*padY)*aspect,minimum);
+ const h=w/aspect;
+ return {x:box.x+box.w/2-w/2,y:box.y+box.h/2-h/2,w,h};
+}
+function setView(v){
+ if(![v.x,v.y,v.w,v.h].every(Number.isFinite)||v.w<=0||v.h<=0)return;
+ view={...v};
+ svg.setAttribute("viewBox",[v.x,v.y,v.w,v.h].map(x=>x.toFixed(3)).join(" "));
+ if(mode==="schematic")updateLabels();
+}
+function fitVisible(){
+ if(mode==="linear"){
+  linear.scrollLeft=0;linear.scrollTop=0;
+  return;
+ }
+ const state=selection(),focus=state.key!=="all"||state.layerId!=="all";
+ setView(fitBox(visibleContentBox(),{focus}));
+}
+function zoom(factor){
+ if(mode==="linear"){
+  linearStep=Math.max(105,Math.min(205,linearStep/factor));
+  linear.style.setProperty("--stop-step",linearStep+"px");
+  return;
+ }
+ const cx=view.x+view.w/2,cy=view.y+view.h/2;
+ const minWidth=baseline.w*.28,maxWidth=baseline.w*1.1;
+ const w=Math.max(minWidth,Math.min(maxWidth,view.w*factor));
+ const h=w/mapAspect();
+ setView({x:cx-w/2,y:cy-h/2,w,h});
 }
 function updateLabels(){
- const pixelFont=23*svg.clientWidth/Math.max(1,vb.width);
- const anchors=new Set(["eq01","eq10","eq16","eq31","eq37","eq39","eq59","eq64","eq67"]);
- const blocked=[...svg.querySelectorAll("#stage-headings text,#research-layer-guides text")].filter(t=>getComputedStyle(t).display!=="none").map(t=>t.getBoundingClientRect());
+ if(mode!=="schematic")return;
+ const state=selection();
+ const pixelFont=23*svg.clientWidth/Math.max(1,view.w);
+ const blocked=[...svg.querySelectorAll("#stage-headings text,#research-layer-guides text")]
+  .filter(t=>getComputedStyle(t).display!=="none").map(t=>t.getBoundingClientRect());
  const placed=[];
  const overlaps=(a,b)=>a.left<b.right+3&&a.right+3>b.left&&
                          a.top<b.bottom+3&&a.bottom+3>b.top;
  const candidates=labels.map(t=>{
-   const m=data.moments[t.dataset.stationId];
-   const tier=anchors.has(m?.id)?0:m?.decision?1:m?.key?2:3;
-   return {t,m,tier};
+  const m=data.moments[t.dataset.stationId];
+  return {t,m,tier:anchors.has(m?.id)?0:m?.decision?1:m?.key?2:3};
  }).sort((a,b)=>a.tier-b.tier);
  const bounds=svg.getBoundingClientRect();
  for(const {t,m,tier} of candidates){
-   let eligible=tier===0;
-   if(pixelFont>=10.5)eligible ||= tier===1;
-   if(pixelFont>=13)eligible ||= tier===2;
-   if(pixelFont>=19)eligible=true;
-   if(expandedLabels)eligible ||= (tier<=2&&pixelFont>=9.5);
-   if(!eligible){t.style.opacity=0;continue}
-   t.style.opacity=1;
-   const r=t.getBoundingClientRect();
-   if(r.width===0||r.height===0||r.left<bounds.left+5||
-      r.right>bounds.right-5||r.top<bounds.top+5||r.bottom>bounds.bottom-5||
-      blocked.some(q=>overlaps(r,q))||placed.some(q=>overlaps(r,q))){
-     t.style.opacity=0;continue;
-   }
-   placed.push(r);
+  let eligible=tier===0||(tier===1&&pixelFont>=10.5)||
+      (tier===2&&pixelFont>=13)||(pixelFont>=19);
+  if(expandedLabels)eligible||=tier<=2&&pixelFont>=9.5;
+  eligible&&=state.ids.has(t.dataset.stationId);
+  if(!eligible){t.style.opacity="0";t.style.pointerEvents="none";continue}
+  t.style.opacity="1";
+  const r=t.getBoundingClientRect();
+  if(!r.width||!r.height||r.left<bounds.left+5||r.right>bounds.right-5||
+     r.top<bounds.top+5||r.bottom>bounds.bottom-5||
+     blocked.some(q=>overlaps(r,q))||placed.some(q=>overlaps(r,q))){
+   t.style.opacity="0";t.style.pointerEvents="none";continue;
+  }
+  t.style.pointerEvents="auto";
+  placed.push(r);
  }
 }
-function focus(){
- const key=route.value,layerId=layer.value;
- const selected=new Set(data.routes[key]?.stationIds||[]);
- for(const g of groups)g.classList.toggle("subdued",key!=="all"&&g.dataset.line!==data.routes[key]?.name);
- for(const c of circles)c.classList.toggle("subdued",
-   key!=="all"&&!selected.has(c.dataset.stationId)||
-   layerId!=="all"&&c.dataset.layer!==layerId);
- if(key==="all"&&layerId==="all")fit();
- else if(key!=="all")fitStations(selected);
- else fitStations(new Set(circles.filter(c=>c.dataset.layer===layerId).map(c=>c.dataset.stationId)));
-}
-route.addEventListener("change",focus);layer.addEventListener("change",focus);
-document.querySelector("#labelToggle").onclick=e=>{
- expandedLabels=!expandedLabels;e.currentTarget.setAttribute("aria-pressed",String(expandedLabels));
- updateLabels();
-};
-function zoom(factor){
- const cx=vb.x+vb.width/2,cy=vb.y+vb.height/2;
- let w=Math.max(260,Math.min(home.w*1.5,vb.width*factor));
- let h=w*frame.clientHeight/Math.max(1,frame.clientWidth);
- setView(cx-w/2,cy-h/2,w,h);
-}
-document.querySelector("#zoomIn").onclick=()=>zoom(.77);
-document.querySelector("#zoomOut").onclick=()=>zoom(1.3);
-document.querySelector("#fit").onclick=focus;
-document.querySelector("#fullscreen").onclick=()=>{
- document.fullscreenElement?document.exitFullscreen?.():frame.requestFullscreen?.();
-};
-document.addEventListener("fullscreenchange",()=>requestAnimationFrame(()=>{
- if(route.value==="all"&&layer.value==="all")fit();else focus();
-}));
-const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({
- "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-for(const c of circles){c.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();c.dispatchEvent(new MouseEvent("click",{bubbles:true}))}});c.addEventListener("click",()=>{
- const mid=c.dataset.stationId,m=data.moments[mid];if(!m)return;
- selectedId=mid;
- for(const other of circles)other.classList.toggle("selected-station",other===c);
- ins.hidden=false;
+function showInspector(mid){
+ const m=data.moments[mid];if(!m)return;
+ selectedId=mid;ins.hidden=false;
+ for(const c of circles)c.classList.toggle("selected-station",c.dataset.stationId===mid);
  insBody.innerHTML='<h2>'+escapeHtml(m.label)+'</h2>'+
  '<div class="field"><small>Journey stage</small><b>'+escapeHtml(m.stage)+'</b></div>'+
  '<div class="field"><small>Authored research layer</small><b>'+escapeHtml(m.researchLayer)+'</b></div>'+
  '<div class="field"><small>Evidence class</small><b>'+escapeHtml(m.evidence)+
  (m.evidenceRefPresent?' · source reference present':' · no linked source in public fixture')+'</b></div>'+
  '<div class="field"><small>Authored source relationships</small><p>'+m.links.map(e=>
- escapeHtml(e.id+' · '+e.kind+' · '+e.from+' → '+e.to)).join('<br>')+'</p></div>';
-});}
+ escapeHtml(e.id+' · '+e.kind+' · '+e.from+' → '+e.to)).join(', ')+'</p></div>';
+ // Inspecting a station NEVER changes the camera. Click or Enter has identical behavior.
+}
+function createLinear(){
+ for(const [id,r] of Object.entries(data.routes)){
+  const section=document.createElement("section");
+  section.className="linear-route";section.dataset.route=id;
+  const heading=document.createElement("h2");heading.textContent=r.name;
+  const track=document.createElement("div");track.className="linear-track";
+  track.style.setProperty("--route-color",r.color);
+  for(const mid of r.stationIds){
+   const m=data.moments[mid];
+   const b=document.createElement("button");b.type="button";
+   b.className="linear-stop";b.dataset.stationId=mid;
+   b.setAttribute("aria-label",m.label+" · "+m.stage);
+   const dot=document.createElement("span");dot.className="dot";dot.setAttribute("aria-hidden","true");
+   const label=document.createElement("span");label.className="name";label.textContent=m.label;
+   const meta=document.createElement("span");meta.className="meta";meta.textContent=m.stage;
+   b.append(dot,label,meta);b.addEventListener("click",()=>showInspector(mid));
+   track.append(b);
+  }
+  section.append(heading,track);rows.append(section);
+ }
+}
+function updateFocus({refit=true}={}){
+ const state=selection(),selected=state.ids;
+ for(const g of groups){
+  g.classList.toggle("subdued",state.key!=="all"&&g.dataset.line!==data.routes[state.key].name);
+ }
+ for(const c of circles)c.classList.toggle("subdued",!selected.has(c.dataset.stationId));
+ for(const section of rows.querySelectorAll(".linear-route")){
+  section.hidden=state.key!=="all"&&section.dataset.route!==state.key;
+  for(const b of section.querySelectorAll(".linear-stop")){
+   b.classList.toggle("subdued",state.layerId!=="all"&&
+    data.moments[b.dataset.stationId].layer!==state.layerId);
+  }
+ }
+ if(refit)fitVisible();
+ else if(mode==="schematic")updateLabels();
+}
+function changeMode(next){
+ mode=next;
+ frame.dataset.mode=next;
+ document.querySelector("#schematicMode").setAttribute("aria-pressed",String(next==="schematic"));
+ document.querySelector("#linearMode").setAttribute("aria-pressed",String(next==="linear"));
+ linear.hidden=next!=="linear";
+ document.querySelector("#labelToggle").disabled=next==="linear";
+ if(next==="schematic")fitVisible();
+ else{linear.scrollLeft=0;linear.scrollTop=0;}
+}
+createLinear();
+document.querySelector("#schematicMode").onclick=()=>changeMode("schematic");
+document.querySelector("#linearMode").onclick=()=>changeMode("linear");
+route.addEventListener("change",()=>updateFocus());
+layer.addEventListener("change",()=>updateFocus());
+document.querySelector("#labelToggle").onclick=e=>{
+ expandedLabels=!expandedLabels;
+ e.currentTarget.setAttribute("aria-pressed",String(expandedLabels));
+ updateLabels();
+};
+document.querySelector("#zoomIn").onclick=()=>zoom(.8);
+document.querySelector("#zoomOut").onclick=()=>zoom(1.25);
+document.querySelector("#fit").onclick=()=>fitVisible();
+document.querySelector("#fullscreen").onclick=()=>{
+ document.fullscreenElement?document.exitFullscreen?.():frame.requestFullscreen?.();
+};
+document.addEventListener("fullscreenchange",()=>requestAnimationFrame(fitVisible));
+window.addEventListener("resize",()=>requestAnimationFrame(fitVisible));
+for(const c of circles){
+ c.addEventListener("click",e=>{e.stopPropagation();showInspector(c.dataset.stationId)});
+ c.addEventListener("keydown",e=>{
+  if(e.key==="Enter"||e.key===" "){e.preventDefault();showInspector(c.dataset.stationId)}
+ });
+}
+for(const t of labels){
+ t.addEventListener("click",e=>{e.stopPropagation();showInspector(t.dataset.stationId)});
+}
 document.querySelector("#closeInspector").onclick=()=>{
  ins.hidden=true;selectedId=null;
  for(const c of circles)c.classList.remove("selected-station");
 };
-let drag=null;
 svg.addEventListener("pointerdown",e=>{
- if(e.target.closest("circle"))return;
+ if(e.target.closest("#stations,#labels"))return;
  drag=[e.clientX,e.clientY];svg.setPointerCapture(e.pointerId);svg.classList.add("grabbed");
 });
 svg.addEventListener("pointermove",e=>{
  if(!drag)return;
- vb.x-=(e.clientX-drag[0])/svg.clientWidth*vb.width;
- vb.y-=(e.clientY-drag[1])/svg.clientHeight*vb.height;
+ const dx=(e.clientX-drag[0])/Math.max(1,svg.clientWidth)*view.w;
+ const dy=(e.clientY-drag[1])/Math.max(1,svg.clientHeight)*view.h;
  drag=[e.clientX,e.clientY];
+ setView({x:view.x-dx,y:view.y-dy,w:view.w,h:view.h});
 });
 svg.addEventListener("pointerup",()=>{drag=null;svg.classList.remove("grabbed");updateLabels()});
 svg.addEventListener("pointercancel",()=>{drag=null;svg.classList.remove("grabbed");updateLabels()});
-svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.89)},{passive:false});
-if(window.innerWidth<760){
+svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.12:.89)},{passive:false});
+baseline=fitBox(visibleContentBox(true));
+if(innerWidth<760){
  const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
- fitStations(first);
-}else fit();
+ const items=circles.filter(c=>first.has(c.dataset.stationId));
+ const b=unionBoxes(items);
+ setView(fitBox(b,{focus:true}));
+}else fitVisible();
 })();</script></body></html>"""
     return document.replace("__SVG__",svg).replace("__DATA__",payload)
 
