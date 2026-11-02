@@ -78,9 +78,43 @@ jobs:
                   assert not page.locator("#inspector").is_visible()
                   page.locator("#routeFocus").select_option("all")
                   page.locator("#layerFocus").select_option("all")
-                  assert not errors, errors
+                  # Camera Fit is stable and cannot zoom the complete network
+                  # far outside the content framing.
+                  page.locator("#fit").click()
+                  all_fit=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  for _ in range(15):
+                      page.locator("#zoomOut").click()
+                  max_zoom=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  assert max_zoom<=all_fit*1.12, (all_fit,max_zoom)
+                  page.locator("#routeFocus").select_option("technical_approval")
+                  focused=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  assert focused>=all_fit*.40, (focused,all_fit)
+                  before_label=page.locator("#metro").get_attribute("viewBox")
+                  page.locator("#labels text[data-station-id='eq31']").dispatch_event("click")
+                  assert page.locator("#metro").get_attribute("viewBox")==before_label
+                  assert page.locator("#inspector").is_visible()
+                  page.locator("#closeInspector").click()
+                  page.locator("#routeFocus").select_option("all")
+                  page.locator("#fit").click()
                   page.screenshot(path=f"out/system-v7-{name}-focus.png",full_page=True)
-                  print(name,"STATION / STAGES / ROUTES / LAYERS / INSPECTOR / JS PASS")
+                  # Linear is the same ordered canonical stops, not a new graph.
+                  page.locator("#linearMode").click()
+                  assert page.locator("#linear").is_visible()
+                  assert page.locator("#linear .linear-route").count()==11
+                  assert page.locator("#schematicMode").get_attribute("aria-pressed")=="false"
+                  page.screenshot(path=f"out/system-v7-{name}-linear.png",full_page=True)
+                  page.locator("#routeFocus").select_option("ae_epc_mediated")
+                  assert page.locator("#linear .linear-route:visible").count()==1
+                  assert page.locator("#linear .linear-stop").count()>=59
+                  page.locator("#linear .linear-route:visible .linear-stop").first.click()
+                  assert page.locator("#inspector").is_visible()
+                  page.locator("#closeInspector").click()
+                  page.locator("#fit").click()
+                  page.locator("#schematicMode").click()
+                  assert page.locator("#metro").is_visible()
+                  assert page.locator("#linear").is_hidden()
+                  assert not errors, errors
+                  print(name,"MODES / FIT / ZOOM LIMITS / LABEL INSPECTION / SOURCE ORDER PASS")
                   page.close()
               browser.close()
           PY
