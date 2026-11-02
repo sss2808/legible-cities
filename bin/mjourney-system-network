@@ -64,22 +64,29 @@ SEEDS={}
 # Layout semantics: x is the authored ten-stage ordinal; y is the actual
 # research layer, with Journey sequence (layer-0) centered in the field.
 # This does not infer physical place, duration, stakeholder travel or transfers.
-ROW_Y={"layer-0":620,"layer-1":190,"layer-2":420,"layer-3":835,
-       "layer-4":1060,"layer-5":1300,"layer-6":1490}
+ROW_Y={"layer-0":670,"layer-1":370,"layer-2":535,"layer-3":790,
+       "layer-4":935,"layer-5":1080,"layer-6":1210}
 
 def seed_poly(a,b):
+    """Minimum-bend octilinear fallback for a single authorized source edge.
+
+    No intermediate coordinates are research stations or connection claims.
+    Native LOOM geometry, if accepted, bypasses this entirely.
+    """
     x0,y0=a;x1,y1=b
     dx=x1-x0;dy=y1-y0
-    if abs(dy)<.00001:return [a,b]
-    d=min(abs(dx),abs(dy))
-    signx=1 if dx>=0 else -1
-    signy=1 if dy>=0 else -1
-    before=(dx-signx*d)/2
-    points=[a,(x0+before,y0),(x0+before+signx*d,y0+signy*d),b]
-    clean=[]
-    for p in points:
-        if not clean or math.dist(p,clean[-1])>.000001:clean.append(p)
-    return clean
+    ax,ay=abs(dx),abs(dy)
+    if ax<1e-7 or ay<1e-7 or abs(ax-ay)<1e-7:
+        return [a,b]
+    sx=1 if dx>=0 else -1
+    sy=1 if dy>=0 else -1
+    if ax>ay:
+        # One diagonal and one horizontal; avoid two symmetric zig-zag bends.
+        mid=(x0+sx*ay,y1)
+    else:
+        # One vertical and one diagonal to retain 45-degree directions.
+        mid=(x0,y0+sy*(ay-ax))
+    return [a,mid,b]
 
 def source_records(source):
     assert len(source["moments"])==67 and len(source["connections"])==87
@@ -108,7 +115,7 @@ def source_records(source):
         for i,m in enumerate(present):
             fraction=(i+.5)/len(present)
             SEEDS[m["id"]]=(120+stage["order"]*330+fraction*250,
-                            ROW_Y[m["layerId"]]+(int(m["id"][2:])%3-1)*16)
+                            ROW_Y[m["layerId"]])
     assert len(SEEDS)==len(required)
     return moments,edges
 
@@ -348,8 +355,10 @@ def page(svg,graph,source,audit):
                             "from":conn[eid]["fromId"],"to":conn[eid]["toId"]}
                            for eid in TRACK_IDS if mid in (conn[eid]["fromId"],conn[eid]["toId"])]}
              for mid in SEEDS}
-    route_stations={lid:sorted({v for eid in chain for v in
-                  (conn[eid]["fromId"],conn[eid]["toId"])}) for lid,chain in ROUTES.items()}
+    route_stations={lid:[conn[chain[0]]["fromId"]]+
+                  [conn[eid]["toId"] for eid in chain]
+                  for lid,chain in ROUTES.items()}
+    assert all(len(stops)==len(set(stops)) for stops in route_stations.values())
     payload=json.dumps({"moments":details,
        "routes":{lid:{"name":l.label,"color":l.color,"stationIds":route_stations[lid]}
                   for lid,l in LINES.items()},
