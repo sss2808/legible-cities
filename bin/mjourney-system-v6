@@ -171,51 +171,89 @@ def native_hint(source,graph,path,enabled):
                       "reason":str(exc)[:350],"fallback":"source-authored topology"}
 
 def supplementary(svg,source,graph,bounds):
-    # Overlay stage guides with the SAME camera as the schematic.
+    """Use the renderer's *final* station positions for stages and feedback.
+
+    Legible Cities normalizes and rescales all coordinates internally.
+    Reusing input coordinates for annotations silently misaligns headings.
+    The original native renderer supplies the authoritative final SVG x/y.
+    """
     import xml.etree.ElementTree as ET
     ET.register_namespace("","http://www.w3.org/2000/svg")
     root=ET.fromstring(svg)
     ns="{http://www.w3.org/2000/svg}"
-    # Original renderer labels link through data-node rather than station IDs.
-    ptr={e.attrib.get("data-node"):e.attrib.get("data-station-id")
-         for e in root.findall(".//"+ns+"circle") if e.attrib.get("data-station-id")}
+    circles=root.findall(".//"+ns+"circle")
+    rendered={el.attrib["data-station-id"]:(float(el.attrib["cx"]),float(el.attrib["cy"]))
+              for el in circles if el.attrib.get("data-station-id")}
+    expected={n.station_id for n in graph.stations}
+    assert len(rendered)==len(expected)==67 and set(rendered)==expected,"rendered ID loss"
+    node_pointer={el.attrib.get("data-node"):el.attrib.get("data-station-id")
+                  for el in circles if el.attrib.get("data-station-id")}
     moments={m["id"]:m for m in source["moments"]}
     for label in root.findall(".//"+ns+"g[@id='labels']/"+ns+"text"):
-        mid=ptr.get(label.attrib.get("data-node"))
+        mid=node_pointer.get(label.attrib.get("data-node"))
         if mid:
             label.set("data-station-id",mid)
             label.set("class","key-label" if moments[mid].get("key") else "detail-label")
-    box=[float(x) for x in root.get("viewBox").split()]
-    # Stage header on map canvas; headings pan and zoom with stations.
-    upper=box[1]-105
-    layers=ET.Element(ns+"g",{"id":"journey-stage-guides","aria-label":"Ten authored stages"})
+
+    # Fit the native renderer's affine transform from *actual stations*.
+    # Never infer it from a guessed output width. Validate its residual.
+    def fit_axis(axis):
+        samples=[(n.coord[axis],rendered[n.station_id][axis]) for n in graph.stations]
+        avx=sum(a for a,_ in samples)/len(samples)
+        avy=sum(b for _,b in samples)/len(samples)
+        var=sum((a-avx)**2 for a,_ in samples)
+        if var<1e-12:raise ValueError("degenerate station geometry")
+        scale=sum((a-avx)*(b-avy) for a,b in samples)/var
+        offset=avy-scale*avx
+        residual=max(abs(scale*a+offset-b) for a,b in samples)
+        if residual>3.0:
+            raise ValueError(f"native rendering not affine enough for stage guides: {residual:.2f}")
+        return lambda v: scale*v+offset
+    px=fit_axis(0)
+    py=fit_axis(1)
+
+    box=[float(v) for v in root.attrib["viewBox"].split()]
+    miny=min(v[1] for v in rendered.values())
+    maxy=max(v[1] for v in rendered.values())
+    upper=miny-65
+
+    # Ten meaningful stage headings share the exact native renderer camera.
+    guides=ET.Element(ns+"g",{"id":"journey-stage-guides",
+                              "aria-label":"Ten authored ordinal stages"})
     for st in bounds:
-        x1=st["startX"];x2=st["endX"];xm=(x1+x2)/2
-        line=ET.SubElement(layers,ns+"line",{"x1":str(x1),"x2":str(x1),
-                 "y1":str(upper+48),"y2":str(box[1]+box[3]-45),
-                 "stroke":"#5c514a","stroke-width":"1","stroke-dasharray":"2 13",
-                 "opacity":"0.38"})
-        ET.SubElement(layers,ns+"text",{"x":str(xm),"y":str(upper+30),
-                  "fill":"#d9d0c4","font-size":"19","font-weight":"650",
-                  "text-anchor":"middle","letter-spacing":"0.2"}).text=st["name"]
-    root.insert(1,layers)
-    # Lifecycle return has distinct relationship semantics, not a forward path.
-    source_by={e["id"]:e for e in source["connections"]}
-    lifecycle=[e for e in source["connections"] if e["kind"]=="lifecycle_return"]
-    if lifecycle:
-        station_by={n.station_id:n for n in graph.stations}
-        e=lifecycle[0];a=station_by[e["fromId"]].coord;b=station_by[e["toId"]].coord
-        bottom=max(n.coord[1] for n in graph.stations)+140
-        overlay=ET.SubElement(root,ns+"g",{"id":"research-return","data-kind":"lifecycle_return"})
-        ET.SubElement(overlay,ns+"path",{"d":f"M {a[0]:.2f} {a[1]:.2f} V {bottom:.2f} H {b[0]:.2f} V {b[1]:.2f}",
-                  "stroke":"#ac9a88","stroke-width":"2.2","stroke-dasharray":"7 10",
-                  "fill":"none","opacity":"0.58"})
-        ET.SubElement(overlay,ns+"text",{"x":str((a[0]+b[0])/2),"y":str(bottom-13),
-                  "text-anchor":"middle","fill":"#b2a496","font-size":"14"}).text="Lifecycle feedback"
-    # Avoid clipped headings/return in the original viewBox.
-    new_top=min(upper-5,box[1]);bottom=max(n.coord[1] for n in graph.stations)+185
-    new_bottom=max(box[1]+box[3],bottom)
-    root.set("viewBox",f"{box[0]-40:.2f} {new_top:.2f} {box[2]+80:.2f} {new_bottom-new_top:.2f}")
+        left,right=px(st["startX"]),px(st["endX"])
+        cx=(left+right)/2
+        ET.SubElement(guides,ns+"line",{"x1":f"{left:.2f}","x2":f"{left:.2f}",
+             "y1":f"{upper+33:.2f}","y2":f"{maxy+28:.2f}",
+             "stroke":"#7d6b60","stroke-width":"1","stroke-dasharray":"2 14",
+             "opacity":"0.22"})
+        ET.SubElement(guides,ns+"text",{"x":f"{cx:.2f}","y":f"{upper+15:.2f}",
+             "fill":"#eee0d1","font-size":"26","font-weight":"650",
+             "text-anchor":"middle","letter-spacing":"0.35"}).text=st["name"]
+    root.insert(1,guides)
+
+    # Lifecycle feedback is an authored *return*, not a linear journey stage,
+    # not a train service and not a source of elapsed-time dimensions.
+    feedback=[e for e in source["connections"] if e["kind"]=="lifecycle_return"]
+    if feedback:
+        edge=feedback[0];a=rendered[edge["fromId"]];b=rendered[edge["toId"]]
+        bottom=maxy+75
+        overlay=ET.SubElement(root,ns+"g",{"id":"research-return",
+                        "data-source-edge-id":edge["id"],
+                        "data-kind":"lifecycle_return"})
+        ET.SubElement(overlay,ns+"path",{"d":f"M {a[0]:.2f} {a[1]:.2f} "
+                         f"V {bottom:.2f} H {b[0]:.2f} V {b[1]:.2f}",
+                "stroke":"#ac9a88","stroke-width":"3.4",
+                "fill":"none","opacity":"0.42"})
+        ET.SubElement(overlay,ns+"text",{"x":f"{(a[0]+b[0])/2:.2f}",
+                "y":f"{bottom-12:.2f}","text-anchor":"middle",
+                "fill":"#c9b8a6","font-size":"17"}).text="Lifecycle feedback"
+
+    left=min(box[0],min(v[0] for v in rendered.values())-50)
+    right=max(box[0]+box[2],max(v[0] for v in rendered.values())+50)
+    top=min(box[1],upper-20)
+    bottom=max(box[1]+box[3],maxy+112)
+    root.set("viewBox",f"{left:.2f} {top:.2f} {right-left:.2f} {bottom-top:.2f}")
     root.set("id","map")
     root.set("role","img")
     root.set("aria-label","Equipment buying source-connected systems schematic")
