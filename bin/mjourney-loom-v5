@@ -31,6 +31,51 @@ def simplify(points,eps=20.0):
     i=max(range(len(deviations)),key=deviations.__getitem__)
     return (simplify(points[:i+2],eps)[:-1]+simplify(points[i+1:],eps)) if deviations[i]>eps else [a,b]
 
+
+def station_adjacencies(graph):
+    """Adjacent canonical stop pairs per line, ignoring geometry-only nodes.
+
+    This guards against LOOM joining otherwise unrelated source tracks at
+    crossings or moving a route through a non-adjacent research station.
+    """
+    byline={}
+    for edge in graph.edges:
+        for line in edge.lines:
+            g=byline.setdefault(line.id,{})
+            g.setdefault(edge.src,set()).add(edge.dst)
+            g.setdefault(edge.dst,set()).add(edge.src)
+    output={}
+    for label,g in byline.items():
+        pairs=set()
+        for node in graph.stations:
+            if node.id not in g:continue
+            pending=[node.id];seen={node.id}
+            while pending:
+                current=pending.pop()
+                for nxt in g[current]:
+                    if nxt in seen:continue
+                    seen.add(nxt)
+                    station=graph.nodes[nxt].station_id
+                    if station:
+                        pairs.add(tuple(sorted((node.station_id,station))))
+                    else:
+                        pending.append(nxt)
+        output[label]=pairs
+    return output
+
+def adjacency_proof(original,solved):
+    a=station_adjacencies(original)
+    b=station_adjacencies(solved)
+    diff={}
+    for lid in sorted(set(a)|set(b)):
+        lost=sorted(a.get(lid,set())-b.get(lid,set()))
+        added=sorted(b.get(lid,set())-a.get(lid,set()))
+        diff[lid]={"inputPairs":len(a.get(lid,set())),
+                   "solvedPairs":len(b.get(lid,set())),
+                   "removed":lost,"introduced":added}
+    return {"preserved":a==b,"perLine":diff}
+
+
 def constrain(graph,source):
     byid={m["id"]:m for m in source["moments"]}
     stages=sorted(source["stages"],key=lambda s:s["order"])
@@ -133,6 +178,9 @@ def main():
                      "points":sum(f["geometry"]["type"]=="Point" for f in solved["features"]),
                      "segments":sum(f["geometry"]["type"]=="LineString" for f in solved["features"])}
         print(name,steps[name],flush=True)
+    proof=adjacency_proof(LineGraph.from_geojson(seed),LineGraph.from_geojson(solved))
+    if args.mode=="categories" and not proof["preserved"]:
+        raise ValueError("LOOM altered category-guide station adjacency; refuse render")
     graph,windows=constrain(LineGraph.from_geojson(solved),source)
     path.with_suffix(".constrained.geojson").write_text(json.dumps(graph.to_geojson(),indent=2))
     layers=sorted(source["layers"],key=lambda l:l["order"])
@@ -150,7 +198,7 @@ def main():
     import runpy
     viewer=runpy.run_path(str(Path(__file__).resolve().parent/"mjourney-preview"))["viewer_for_journey"]
     path.with_suffix(".html").write_text(viewer(page))
-    audit={"reviewStatus":"unapproved geometry proof",
+    audit={"reviewStatus":("unapproved geometry proof" if proof["preserved"] else "REJECTED: LOOM changed source-authored station adjacency"),
            "engine":"real LOOM topo > loom > octi; original Legible Cities render > animate",
            "inputRole":("67 source moments; 60 non-traversable organizational guides" if args.mode=="categories" else "67 source moments; 83 authored sequence, branch, convergence and handoff edges; not an approved 7-line transit map"),
            "canonical":{"moments":len(source["moments"]),"relationships":len(source["connections"]),
@@ -158,10 +206,11 @@ def main():
            "solverSteps":steps,"result":{"stations":len(graph.stations),"edges":len(graph.edges),
                   "geometryOnlyNodes":len(graph.nodes)-len(graph.stations),
                   "lines":graph.labels,"droppedLabels":result.dropped_labels},
-           "stageWindows":windows,"mode":args.mode,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
+           "stageWindows":windows,"stationAdjacencyProof":proof,"mode":args.mode,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
            "limits":["Geometric junctions are not customer transfers.",
                      "Layer continuity is not verified directed movement.",
                      "Stage-constrained repair and polyline simplification change LOOM bends; visual approval pending."]}
     path.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2))
     print("RENDERED",path,"stations",len(graph.stations),"labels dropped",len(result.dropped_labels),flush=True)
+    if not proof["preserved"]:raise SystemExit("SOURCE TOPOLOGY REJECTED: unintended adjacency changes; see audit.json")
 if __name__=="__main__":main()
