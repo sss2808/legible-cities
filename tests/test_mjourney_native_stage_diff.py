@@ -83,6 +83,34 @@ class StageDifferentialTests(unittest.TestCase):
         self.assertTrue(report["stages"]["loom"]["semanticAudit"]["passed"])
         self.assertTrue(report["transitions"]["inputToLoom"]["directStationEdgeOrderChanges"])
 
+    def test_grid_variant_review_cannot_auto_accept_invalid_station_adjacency(self):
+        probe=runpy.run_path(str(ROOT/"bin/mjourney-octi-constraint-probe"))
+        candidate=copy.deepcopy(self.seed)
+        original=probe["review"]("seed",candidate,self.seed,self.source,
+                                 self.manifest,self.v7)
+        self.assertTrue(original["accepted"],original)
+        edge=next(e for e in candidate.edges
+                  if e.props.get("sourceEdgeIds")==["edge01"])
+        edge.dst="eq67"
+        edge.geometry[-1]=candidate.nodes["eq67"].coord
+        rejected=probe["review"]("tampered",candidate,self.seed,self.source,
+                                 self.manifest,self.v7)
+        self.assertFalse(rejected["accepted"],rejected)
+        self.assertFalse(rejected["perLineAdjacencyPreserved"])
+
+    def test_grid_variant_review_rejects_stage_order_regression(self):
+        probe=runpy.run_path(str(ROOT/"bin/mjourney-octi-constraint-probe"))
+        candidate=copy.deepcopy(self.seed)
+        mid=next(n.id for n in candidate.stations
+                 if n.props.get("stageId")=="stage-5")
+        _,y=candidate.nodes[mid].coord
+        candidate.nodes[mid].coord=(950.0,y)
+        rejected=probe["review"]("invalid stage",candidate,self.seed,self.source,
+                                 self.manifest,self.v7)
+        self.assertFalse(rejected["accepted"],rejected)
+        self.assertTrue(rejected["perLineAdjacencyPreserved"])
+        self.assertFalse(rejected["stageOrderPreserved"])
+
     def test_coordinate_roundtrip_keeps_all_station_identities(self):
         transformed=self.v7["from_solver"](self.v7["to_solver"](self.seed))
         report=self.analyze(transformed,transformed)
