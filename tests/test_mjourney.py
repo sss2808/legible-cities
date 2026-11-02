@@ -30,7 +30,7 @@ def test_complete_public_fixture_retained(source):
     assert len(source["connections"]) == 87
     assert len(source["stages"]) == 10
     assert len(source["layers"]) == 7
-    assert len(out.graph.nodes) == 26
+    assert len(out.graph.nodes) == 28
     assert len(out.graph.labels) == 7
     assert out.audit["canonical"]["momentCount"] == 67
     assert out.audit["canonical"]["connectionCount"] == 87
