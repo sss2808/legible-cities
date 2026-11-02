@@ -1,0 +1,38 @@
+name: M-Journey System native SVG proof
+on:
+  push:
+    branches: [feature/mjourney-loom-stage-v5]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  system:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Render 83 canonical edges with original Legible Cities renderer
+        run: |
+          python bin/mjourney-system-v6 --output out/mjourney-system-v6
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("out/mjourney-system-v6.audit.json").read_text())
+          h=Path("out/mjourney-system-v6.html").read_text()
+          assert a["canonical"]=={"moments":67,"connections":87,"renderedAuthoredEdges":83,"dependencies":3,"lifecycleReturns":1,"stages":10,"layers":7}
+          assert a["geometry"]["sourceEdgePairPreserved"]
+          assert 'id="map"' in h
+          assert "0 trains" not in h and "NaN:NaN" not in h and "train" not in h.lower()
+          assert '<g id="journey-stage-guides"' in h
+          assert "Direct customer pathway" in h and "A&E / EPC pathway" in h
+          assert "System view" in h
+          print("PASS native System source, stages, pathways and no timetable")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mjourney-system-v6-native-review
+          path: out/mjourney-system-v6.*
+          retention-days: 14
