@@ -1,0 +1,126 @@
+name: M-Journey V8 P0b exact Mercator and native LOOM
+on:
+  push:
+    branches: [feature/mjourney-v8-p0b-exact-metric-bridge]
+  pull_request:
+    branches: [feature/mjourney-v8-p0a-source-certificate]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  metric-and-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install checked-out engine
+        run: python -m pip install -e .
+      - name: Run inherited source, original projection and full-system tests
+        run: |
+          python -m unittest discover -s tests -p 'test_mjourney_source_integrity.py' -v
+          python -m unittest discover -s tests -p 'test_mjourney_projection.py' -v
+          python -m unittest discover -s tests -p 'test_mjourney_v8_metric_integration.py' -v
+      - name: Check actual P0a frozen input and deterministic seed map
+        run: |
+          python bin/mjourney-source-certificate \
+            --output out/p0b-source-certificate.json
+          python bin/mjourney-system-network \
+            --output out/p0b-seed
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("out/p0b-seed.audit.json").read_text())
+          p=json.loads(Path("out/p0b-source-certificate.json").read_text())
+          assert p["frozenBaselineReview"]["passed"], p
+          assert p["v7SeedReview"]["passed"], p
+          assert a["sourceCertificate"]["strictPreSolverPassed"], a
+          assert a["sourceCertificate"]["selectedProjection"]=={
+              "moments":59,"relations":68,"lines":11},a
+          assert not a["solver"]["attempted"],a
+          print("P0B METRIC/SEMANTIC UNIT GATES PASS; NATIVE SOLVER NOT ATTEMPTED IN THIS JOB")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-p0b-source-unit-and-seed
+          path: |
+            out/p0b-source-certificate.json
+            out/p0b-seed.*
+          retention-days: 30
+
+  real-native-loom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned source engine and native solver dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libglpk-dev coinor-libcbc-dev libzip-dev
+          python -m pip install -e .
+      - name: Build exact LOOM commit, no topo stage
+        run: |
+          git clone --quiet --depth 1 --recurse-submodules https://github.com/sss2808/loom.git /tmp/loom-source
+          git -C /tmp/loom-source checkout --detach 1e4757838104d1e4d22186c9b77d5fc4b98681a0
+          git -C /tmp/loom-source submodule update --init --recursive
+          cmake -S /tmp/loom-source -B /tmp/loom-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/loom-build --target loom octi -j 2
+          mkdir -p out
+          git -C /tmp/loom-source rev-parse HEAD > out/p0b-native-loom-commit.txt
+      - name: Execute genuine native ten-stage geometry and save all stages
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-system-network --native-loom --timeout 420 \
+            --output out/p0b-native
+      - name: Fail closed unless optimizer geometry is accepted
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          audit=json.loads(Path("out/p0b-native.audit.json").read_text())
+          solver=audit["solver"]
+          verdict={
+              "solverAttempted":solver["attempted"],
+              "solverAccepted":solver["used"],
+              "frozenSourcePassed":audit["sourceCertificate"]["strictPreSolverPassed"],
+              "postSolverSourceReview":solver.get("postSolverSourceReview"),
+              "perLineAdjacency":solver["adjacencyPreserved"],
+              "stationIds":solver["stationIdentityPreserved"],
+              "routeIds":solver["lineIdentityPreserved"],
+              "stageOrder":solver["stageReview"]["preserved"],
+              "weightedAngle":solver["octilinearReview"],
+              "sourceDirectionReconstructed":solver["sourceDirectionReconstructed"],
+              "topologyStageEnabled":solver["topologyStageEnabled"],
+              "exactBridge":solver["coordinateBridge"],
+              "loomCommit":Path("out/p0b-native-loom-commit.txt").read_text().strip(),
+          }
+          Path("out/p0b-native-disposition.json").write_text(
+              json.dumps(verdict,indent=2)+"\n")
+          print(json.dumps(verdict,indent=2))
+          assert verdict["solverAttempted"] and verdict["frozenSourcePassed"]
+          assert not verdict["topologyStageEnabled"]
+          assert verdict["exactBridge"]=="exact_synthetic_web_mercator_pr6"
+          assert verdict["postSolverSourceReview"] is not None
+          assert verdict["weightedAngle"]["minimumAcceptedFraction"]==0.995
+          assert verdict["loomCommit"]=="1e4757838104d1e4d22186c9b77d5fc4b98681a0"
+          if not verdict["solverAccepted"]:
+              raise SystemExit("NATIVE CANDIDATE REJECTED: inspect source/stage/angle audit; fallback is NOT native acceptance")
+          print("NATIVE TEN-STAGE GEOMETRY ACCEPTED")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-p0b-native-evidence
+          path: |
+            out/p0b-native.*
+            out/p0b-native-disposition.json
+            out/p0b-native-loom-commit.txt
+          retention-days: 30
