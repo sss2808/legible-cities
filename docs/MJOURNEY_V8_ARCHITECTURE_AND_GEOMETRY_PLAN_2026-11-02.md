@@ -194,3 +194,15 @@ PR #7 further tightens our P0 requirements:
 - Treat the notebooks as **stage-by-stage debugging recipes** that use public GTFS, not direct algorithms for generating authorized research connections. Notebook 02's `topo` example is explicitly **not** permission to enable that stage in V8.
 - Compare source, line-order, optimized geometry, SVG offsets, and browser camera in that order before writing CSS tweaks. Source integrity and optimized geometry acceptance are different from meeting the visual design bar.
 - No source research fixture edits, new routes, merges/deployments, portfolio/product modifications, or reintroduction of the retired Spatial view are authorized by this planning update.
+
+
+## Implementation update: P0a source certificate
+
+**Status:** code and tests proposed in [draft PR #10](https://github.com/sss2808/legible-cities/pull/10), stacked on the V8 plan branch. This is not an approval of V8 geography, LOOM optimizer output, research-method validity or portfolio publication.
+
+- Reusable implementation: \`src/schematic/mjourney_source_integrity.py\`; source-only CLI: \`bin/mjourney-source-certificate\`.
+- Frozen V7 sanitized source bytes and semantic projection hash: \`fixtures/mjourney/equipment-source-certificate-lock-v7.json\`. This prevents a silently changed fixture from generating a newly self-consistent baseline.
+- Source authority includes all 67/87 canonical records and the selected 59 moments, 68 directed source relationships and 11 explicit route IDs. Exact station/line IDs, stage/layer identities, directed source-edge provenance, and per-edge route memberships are explicit.
+- Strict pre-solver validation fails on fabricated transfer edges, dropped/reversed source links, duplicate stations, membership changes and source metadata drift. Post-solver structural mode collapses geometry-only helper vertices and **does not** claim to verify directed source provenance.
+- Negative/positive unit tests and the dedicated exact-head CI issue machine-readable audit outputs. See [P0a implementation notes](MJOURNEY_V8_P0A_SOURCE_CERTIFICATE.md) for usage, scope limits and test cases.
+- **Pending independent work:** PR #6 Mercator integration and 59-station native solver acceptance (P0b); durable accepted-stage artifacts (P0c); executed/skip coverage for native+browser QA (P0d); source-aware solver-edge reconstruction; cartographic visual quality (P1).
