@@ -232,6 +232,19 @@ def supplementary(svg,source,graph,bounds):
              "text-anchor":"middle","letter-spacing":"0.35"}).text=st["name"]
     root.insert(1,guides)
 
+    # Source dependencies are cross-workstream constraints, not traveler paths.
+    dependencies=ET.SubElement(root,ns+"g",{"id":"research-dependencies",
+                                            "data-kind":"dependency"})
+    for item in source["connections"]:
+        if item["kind"]!="dependency":continue
+        a,b=rendered[item["fromId"]],rendered[item["toId"]]
+        curve=_octilinear(a,b)
+        d="M "+f"{curve[0][0]:.2f} {curve[0][1]:.2f}"
+        d+="".join(f" L {pt[0]:.2f} {pt[1]:.2f}" for pt in curve[1:])
+        ET.SubElement(dependencies,ns+"path",{"d":d,"data-source-edge-id":item["id"],
+                         "stroke":"#bcb1a4","stroke-width":"2.5",
+                         "stroke-dasharray":"4 10","opacity":"0.58","fill":"none"})
+
     # Lifecycle feedback is an authored *return*, not a linear journey stage,
     # not a train service and not a source of elapsed-time dimensions.
     feedback=[e for e in source["connections"] if e["kind"]=="lifecycle_return"]
@@ -305,11 +318,12 @@ main{display:grid;grid-template-columns:minmax(0,1fr) 288px;flex:1;min-height:56
 #map.focus #lines path:not(.highlight){opacity:.095}
 #map.focus #lines path.highlight{stroke-width:14;opacity:1}
 #map.focus #stations circle:not(.highlight){opacity:.26}
+#map.focus #research-dependencies{opacity:.2}
 #map.focus #stations circle.highlight{r:9;stroke-width:2.6}
 #map #lines g.muted{opacity:.09}
 #map #labels text{paint-order:stroke;stroke:#221c17;stroke-width:3px;stroke-linejoin:round}
 #map .selected{stroke:#fff4ce!important;stroke-width:4!important;r:12}
-#map #research-return{pointer-events:none}
+#map #research-return,#map #research-dependencies{pointer-events:none}
 .note{position:absolute;bottom:17px;left:20px;font-size:11px;color:#c4b5a6;background:#171310cb;padding:9px 12px;border:1px solid #4e4136;border-radius:8px;max-width:510px}
 aside{border-left:1px solid #4f4239;background:#191613;padding:24px 18px 30px;overflow:auto}
 aside h2{font-family:Georgia,serif;font-size:24px;font-weight:500;line-height:1.2;margin:10px 0 14px}
@@ -323,6 +337,7 @@ footer{padding:9px 28px;border-top:1px solid #42392f;background:#171310;color:#a
 <header><div><div class="eyebrow">M-Journey / System view</div><h1>Equipment buying journey</h1><div class="subtitle">67 research moments · 10 authored stages · source-connected network</div></div>
 <div class="controls" aria-label="Map controls">
 <button class="active" id="scope" type="button" aria-pressed="true">System</button>
+<button id="dependencies" type="button" aria-pressed="true">Dependencies on</button>
 <button id="overview" type="button">Overview labels</button>
 <button id="all" type="button">All labels</button>
 <button id="ae" type="button">A&E / EPC pathway</button>
@@ -337,7 +352,7 @@ footer{padding:9px 28px;border-top:1px solid #42392f;background:#171310;color:#a
 <span class="eyebrow">Workstreams</span></div>
 <main><section class="mapbox" id="mapbox">
 __SVG__
-<div class="note">Every solid segment connects two authored moments. Colors indicate the originating workstream. Dashed return indicates lifecycle feedback, not elapsed time.</div>
+<div class="note">Solid tracks are authored sequence, branch, convergence or handoff edges. Dashed links are dependencies. The lower return is lifecycle feedback.</div>
 </section><aside id="inspector" aria-live="polite">
 <div class="eyebrow">Inspect the system</div><h2>Connected buying journey</h2>
 <p>Select any station to see its authored relationships, stage and evidence classification.</p>
@@ -389,6 +404,8 @@ document.getElementById('direct').onclick=()=>focus('direct');
 document.getElementById('overview').onclick=()=>{clear();svg.classList.remove('details')};
 document.getElementById('all').onclick=()=>{clear();svg.classList.add('details');activate('all')};
 document.getElementById('fit').onclick=fit;
+document.getElementById('scope').onclick=()=>{clear();svg.classList.remove('details');fit()};
+document.getElementById('dependencies').onclick=e=>{const overlay=svg.querySelector('#research-dependencies');const visible=overlay.style.display!=='none';overlay.style.display=visible?'none':'';e.currentTarget.textContent=visible?'Dependencies off':'Dependencies on';e.currentTarget.setAttribute('aria-pressed',String(!visible))};
 document.getElementById('zoomIn').onclick=()=>zoom(.73);
 document.getElementById('zoomOut').onclick=()=>zoom(1.35);
 document.getElementById('fullscreen').onclick=()=>{let el=document.getElementById('mapbox');if(!document.fullscreenElement)el.requestFullscreen?.();else document.exitFullscreen?.()};
