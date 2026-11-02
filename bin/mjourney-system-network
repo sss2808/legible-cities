@@ -408,7 +408,7 @@ figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border
 .linear-route h2{font:600 15px 'Source Sans 3',Arial,sans-serif;margin:0 0 12px;
   position:sticky;left:0;z-index:1;background:#211b17;padding:3px 10px 3px 0;
   width:max-content;max-width:min(360px,90vw)}
-.linear-track{display:flex;align-items:start;position:relative;min-width:max-content;
+.linear-track{display:flex;align-items:start;position:relative;width:max-content;min-width:max-content;
   padding-top:4px;padding-bottom:8px}
 .linear-track:before{content:'';position:absolute;left:calc(var(--stop-step)/2);
   right:calc(var(--stop-step)/2);top:16px;height:5px;border-radius:3px;
@@ -424,7 +424,7 @@ figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border
 .linear-stop.subdued{opacity:.25}
 .linear-stop:hover .name,.linear-stop:focus-visible .name{text-decoration:underline}
 .linear-stop:focus-visible{outline:2px solid #f3c06a;outline-offset:-2px}
-figure[data-mode="linear"] #metro,figure[data-mode="linear"] .legend{display:none}
+figure[data-mode="linear"] #metro,figure[data-mode="linear"] .legend,figure[data-mode="linear"] #labelToggle{display:none}
 
 .group-label{color:#f5e9d9;font:600 11px 'Source Sans 3',Arial,sans-serif;background:#211b17df;padding:5px}
 .legend{position:absolute;left:16px;bottom:16px;z-index:2;max-width:min(650px,calc(100% - 32px));padding:9px 12px;background:#211b17e8;color:#dfd1c0;font-size:11px;line-height:1.55;pointer-events:none}
@@ -572,10 +572,10 @@ function fitBox(box,{focus=false}={}){
  const padX=Math.max(38,box.w*.075),padY=Math.max(55,box.h*.09);
  // Short route subsets are allowed to occupy much of the frame, not become
  // microscopic or jump to a 10x close-up.
- const minimum=focus?baseline.w*.45:0;
+ const minimum=focus?baseline.w*(innerWidth<=760?.35:.45):0;
  const w=Math.max(box.w+2*padX,(box.h+2*padY)*aspect,minimum);
  const h=w/aspect;
- return {x:box.x+box.w/2-w/2,y:box.y+box.h/2-h/2,w,h};
+ return {x:box.x+box.w/2-w/2,y:box.y+box.h/2-h/2+h*.10,w,h};
 }
 function setView(v){
  if(![v.x,v.y,v.w,v.h].every(Number.isFinite)||v.w<=0||v.h<=0)return;
@@ -589,7 +589,12 @@ function fitVisible(){
   return;
  }
  const state=selection(),focus=state.key!=="all"||state.layerId!=="all";
- setView(fitBox(visibleContentBox(),{focus}));
+ if(innerWidth<=760&&!focus){
+  // Phone Fit keeps a readable stage window with lateral panning, rather
+  // than shrinking all ten stages into a single illegible phone-width image.
+  const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
+  setView(fitBox(unionBoxes(circles.filter(c=>first.has(c.dataset.stationId)))));
+ }else setView(fitBox(visibleContentBox(),{focus}));
 }
 function zoom(factor){
  if(mode==="linear"){
@@ -744,7 +749,7 @@ if(innerWidth<760){
  const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
  const items=circles.filter(c=>first.has(c.dataset.stationId));
  const b=unionBoxes(items);
- setView(fitBox(b,{focus:true}));
+ setView(fitBox(b));
 }else fitVisible();
 })();</script></body></html>"""
     return document.replace("__SVG__",svg).replace("__DATA__",payload)
