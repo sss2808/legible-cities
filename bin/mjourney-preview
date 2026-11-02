@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from schematic import animate  # noqa: E402
-from schematic.mjourney import build_network_projection, from_json  # noqa: E402
+from schematic.mjourney import build_network_projection, build_system_v3, from_json  # noqa: E402
 from schematic.render import Style, render  # noqa: E402
 
 DEFAULT_SOURCE = ROOT / "fixtures/mjourney/equipment-sanitized-v1.json"
@@ -75,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--output", type=Path,
                         default=ROOT / "out/mjourney-equipment-schematic.svg")
+    parser.add_argument("--system-v3", action="store_true",
+                        help="Native System schematic with stable seven-line category membership")
     parser.add_argument("--network", action="store_true",
                         help="Use actual authored graph topology and cross-layer transitions")
     parser.add_argument("--full", action="store_true",
@@ -85,8 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     source = json.loads(args.source.read_text(encoding="utf-8"))
-    if args.network:
-        projection = build_network_projection(source, full=args.full)
+    if args.system_v3 or args.network:
+        projection = (build_system_v3(source) if args.system_v3
+                      else build_network_projection(source, full=args.full))
         # CDMX-equivalent warm-dark theme, using native Legible Cities styles.
         style = Style(
             background="#1f1915", station_fill="#f2ede6",
@@ -97,9 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             padding=17, themed=True,
         )
         palette = {
-            label: next(e.lines[0].color for e in projection.graph.edges
-                        if e.lines[0].label == label)
-            for label in projection.graph.labels
+            layer["name"]: layer["color"] for layer in projection.layers
         }
     else:
         selection = [m["id"] for m in source["moments"]] if args.full else None
@@ -123,7 +124,7 @@ def main(argv: list[str] | None = None) -> int:
         "routingEnabled": False,
         "stageConstraintStatus": (
             "source-index layout stage gutters; editorial visual review required"
-            if args.network else "coordinate seeds only; visual review required"),
+            if args.network or args.system_v3 else "coordinate seeds only; visual review required"),
     }
     if args.html:
         anim = animate.build(result, projection.graph, [], dt.date(2026, 11, 2),
