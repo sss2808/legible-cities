@@ -1,0 +1,19 @@
+{
+  "schema": "mjourney-p0a-source-lock/v1",
+  "sourceFixture": "fixtures/mjourney/equipment-sanitized-v1.json",
+  "sourceBytesSha256": "580a66acd1b9f55fe4fa0aa3624bb4aa500028e34cdf8bac01cf138b7c59ce00",
+  "sourceSemanticSha256": "e71a0b02f81a4151402ad703738368724707fb20677bd3bb6d50ba6721dfc38e",
+  "canonicalCounts": {
+    "moments": 67,
+    "relations": 87,
+    "stages": 10,
+    "layers": 7
+  },
+  "projectionCounts": {
+    "moments": 59,
+    "relations": 68,
+    "lines": 11
+  },
+  "scope": "V7 sanitized equipment buying source and selected projection only",
+  "status": "Frozen P0a regression baseline; NOT independent research validation, native LOOM approval, portfolio approval, or production sign-off"
+}
