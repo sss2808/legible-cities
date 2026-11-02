@@ -47,7 +47,7 @@ def _unique(items: list[dict], label: str) -> dict[str, dict]:
 
 
 def _validate(data: dict) -> tuple[dict, dict, dict, dict]:
-    if data.get("schema") != "mjourney-sanitized-equipment-v1":
+    if data.get("schema") not in {"mjourney-sanitized-equipment-v1", "mjourney-sanitized-journey-v1"}:
         raise ProjectionError("unexpected M-Journey fixture schema")
     moments = _unique(data["moments"], "moment")
     connections = _unique(data["connections"], "connection")
@@ -345,7 +345,9 @@ def build_network_projection(data: dict, *, full: bool = False) -> JourneyProjec
         for mid in moments if mid in visible
     }
     routes = [
-        Line(id=layer["id"], label=layer["name"], color=_NETWORK_COLORS[i])
+        Line(id=layer["id"], label=layer["name"],
+             color=(_NETWORK_COLORS[i] if data["journeyId"] == "equipment-public-demo"
+                    else layer["color"]))
         for i, layer in enumerate(ordered_layers)
     ]
     line_by_layer = {ordered_layers[i]["id"]: routes[i] for i in range(len(routes))}
