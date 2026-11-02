@@ -34,6 +34,7 @@ jobs:
           assert m["canonicalCounts"]=={"moments":67,"relations":87,"stages":10,"layers":7}
           assert m["projectionCounts"]=={"moments":59,"relations":68,"lines":11}
           assert p["canonicalReview"]["passed"]
+          assert p["frozenBaselineReview"]["passed"]
           assert p["v7SeedReview"]["passed"]
           assert p["v7SeedReview"]["sourceEdgeProvenanceVerified"]
           assert p["nativeOptimizationAttempted"] is False
@@ -74,6 +75,30 @@ jobs:
           assert not bad["candidateReview"]["passed"]
           assert any("unapproved" in e for e in bad["candidateReview"]["errors"])
           print("SOURCE-EDGE PROVENANCE REJECTION PASS")
+          PY
+      - name: Confirm altered fixture cannot silently replace frozen baseline
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          original=Path("fixtures/mjourney/equipment-sanitized-v1.json")
+          source=json.loads(original.read_text())
+          source["moments"][0]["label"]+=" (regression fixture tamper)"
+          Path("out/p0a-tampered-fixture.json").write_text(json.dumps(source))
+          PY
+          if python bin/mjourney-source-certificate \
+              --source out/p0a-tampered-fixture.json \
+              --output out/p0a-tampered-source-audit.json; then
+            echo "ERROR: altered source bytes were accepted" >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("out/p0a-tampered-source-audit.json").read_text())
+          assert not r["frozenBaselineReview"]["passed"]
+          assert any("sourceBytesSha256" in e for e in r["frozenBaselineReview"]["errors"])
+          print("FROZEN SOURCE LOCK REJECTION PASS")
           PY
       - uses: actions/upload-artifact@v4
         if: always()
