@@ -226,7 +226,7 @@ def svg_with_stages(original,graph,source):
     for sid in ordering:
         xs=groups[sid];center=(min(xs)+max(xs))/2
         ET.SubElement(top,namespace+"text",{"x":f"{center:.2f}","y":f"{ybase:.2f}",
-              "text-anchor":"middle","fill":"#cfc1b5","font-size":"18",
+              "text-anchor":"middle","fill":"#cfc1b5","font-size":"23",
               "font-weight":"700"}).text=stages[sid]["shortName"]
         ET.SubElement(top,namespace+"line",{"x1":f"{min(xs)-24:.2f}",
               "x2":f"{min(xs)-24:.2f}","y1":f"{ybase+18:.2f}",
@@ -285,6 +285,7 @@ figure{margin:0;position:relative;overflow:hidden;background:#211b17}
 #metro #stations circle.selected-station{r:10;stroke:#fff9d1;stroke-width:4}
 #metro #labels text{paint-order:stroke;stroke:#211b17;stroke-width:3}
 #metro #labels text{opacity:0}
+#metro #labels text[data-node="eq31"],#metro #labels text[data-node="eq37"],#metro #labels text[data-node="eq39"],#metro #labels text[data-node="eq32"],#metro #labels text[data-node="eq33"]{opacity:1}
 #metro.all-labels #labels text{opacity:1}
 .figlegend{position:absolute;left:22px;bottom:15px;background:#1a1713e8;border:1px solid #5b4c40;border-radius:8px;padding:11px 14px;font-size:12px;max-width:500px}
 .key{display:inline-block;width:20px;height:5px;vertical-align:middle;margin:0 6px 1px 12px;border-radius:3px}
@@ -314,7 +315,7 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 __SVG__
 <div class="figlegend"><span class="key" style="background:#ef6394"></span>A&E / EPC
 <span class="key" style="background:#36c9dc"></span>Direct customer
-<div style="margin-top:7px;color:#beaea0">Parallel tracks share authored segments. Split at Funding authorized; rejoin at Vendor selected. No train times or invented transfers.</div></div></figure>
+<div style="margin-top:7px;color:#beaea0">Parallel tracks share authored segments. Split at Funding authorized; rejoin at Vendor selected. No invented transfers.</div></div></figure>
 <aside id="inspector" aria-live="polite"><div class="eyebrow">Reading the map</div><h2>Shared system, alternative pathways</h2>
 <p>Two candidate paths pass along the same research-backed corridor, branch during vendor selection, then reconverge. Select a station for evidence and authored connections.</p>
 <div class="field"><small>Provenance</small><b>No synthetic customer moments, connections or interchanges</b></div>
