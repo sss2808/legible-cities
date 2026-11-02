@@ -162,6 +162,13 @@ class SourceCertificateTests(unittest.TestCase):
         self.assertFalse(report["passed"], report)
         self.assertIn("incorrect sourceLayerId", " ".join(report["errors"]))
 
+    def test_changed_station_label_in_projection_is_not_authorized(self):
+        graph = copy.deepcopy(self.seed)
+        graph.nodes["eq01"].station_label = "Different research claim"
+        report = validate_projection_graph(graph, self.manifest)
+        self.assertFalse(report["passed"], report)
+        self.assertIn("source station label changed", " ".join(report["errors"]))
+
     def test_spoofed_relation_kind_fails(self):
         graph = copy.deepcopy(self.seed)
         edge = next(e for e in graph.edges
