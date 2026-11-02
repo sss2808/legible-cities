@@ -5,7 +5,7 @@ import argparse, datetime, hashlib, json, math
 from pathlib import Path
 from schematic import loom, animate
 from schematic.linegraph import LineGraph, Node, Edge
-from schematic.mjourney import build_system_v3
+from schematic.mjourney import build_system_v3, build_network_projection
 from schematic.render import render, Style
 
 def sha(x):
@@ -40,7 +40,7 @@ def constrain(graph,source):
         a,b=ranges[st["id"]]
         for i,n in enumerate(ordered):
             x=(a+b)/2 if len(ordered)==1 else a+28+(b-a-56)*i/(len(ordered)-1)
-            y=155+(n.coord[1]-lo)/span*920 if span>1e-12 else 615
+            y=155+(n.coord[1]-lo)/span*1950 if span>1e-12 else 1130
             new[n.id]=(x,y)
     # Geometric junctions remain non-stations, moved with nearby solved stations.
     for nid,n in graph.nodes.items():
@@ -93,9 +93,10 @@ def main():
     p.add_argument("--source",default="fixtures/mjourney/equipment-sanitized-v1.json")
     p.add_argument("--output",default="out/mjourney-equipment-loom-v5")
     p.add_argument("--timeout",type=int,default=270)
+    p.add_argument("--mode",choices=("categories","source"),default="categories")
     args=p.parse_args(); path=Path(args.output);path.parent.mkdir(exist_ok=True,parents=True)
     source=json.loads(Path(args.source).read_text())
-    projection=build_system_v3(source)
+    projection=build_system_v3(source) if args.mode=="categories" else build_network_projection(source,full=True)
     seed=projection.graph.to_geojson()
     # Artificial solver coordinate grid. Never physical location or elapsed time.
     for feat in seed["features"]:
@@ -127,16 +128,18 @@ def main():
        title="Equipment buying journey | LOOM constrained System",
        name="Equipment buying journey",subtitle="Ten authored stages",
        back="https://github.com/sss2808/legible-cities/pull/1")[path.name+".html"]
-    path.with_suffix(".html").write_text(page)
+    import runpy
+    viewer=runpy.run_path(str(Path(__file__).resolve().parent/"mjourney-preview"))["viewer_for_journey"]
+    path.with_suffix(".html").write_text(viewer(page))
     audit={"reviewStatus":"unapproved geometry proof",
            "engine":"real LOOM topo > loom > octi; original Legible Cities render > animate",
-           "inputRole":"67 source moments; 60 non-traversable organizational guides",
+           "inputRole":("67 source moments; 60 non-traversable organizational guides" if args.mode=="categories" else "67 source moments; 83 authored sequence, branch, convergence and handoff edges; not an approved 7-line transit map"),
            "canonical":{"moments":len(source["moments"]),"relationships":len(source["connections"]),
                         "stages":len(source["stages"]),"layers":len(layers)},
            "solverSteps":steps,"result":{"stations":len(graph.stations),"edges":len(graph.edges),
                   "geometryOnlyNodes":len(graph.nodes)-len(graph.stations),
                   "lines":graph.labels,"droppedLabels":result.dropped_labels},
-           "stageWindows":windows,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
+           "stageWindows":windows,"mode":args.mode,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
            "limits":["Geometric junctions are not customer transfers.",
                      "Layer continuity is not verified directed movement.",
                      "Stage-constrained repair changes LOOM bends; visual approval pending."]}
