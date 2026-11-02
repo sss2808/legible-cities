@@ -251,6 +251,9 @@ def svg_with_stages(original,graph,source):
         c.set("data-layer",layer["id"])
         c.set("data-key","true" if byid[sid]["key"] else "false")
         c.set("data-handoff","true" if sid in handoff_targets else "false")
+        c.set("tabindex","0")
+        c.set("role","button")
+        c.set("aria-label",byid[sid]["label"]+" · "+layer["name"])
         c.set("style",c.get("style","")+";stroke:"+layer["color"]+
               ";stroke-width:"+( "4.8" if sid in handoff_targets else "3.4"))
     # LOOM node IDs are *unstable* internal pointers. Resolve rendered label
@@ -281,7 +284,7 @@ def svg_with_stages(original,graph,source):
     groups=defaultdict(list)
     for mid,(x,y) in positions.items():groups[byid[mid]["stageId"]].append(x)
     ordering=sorted(groups,key=lambda sid:stages[sid]["order"])
-    ybase=min(y for _,y in positions.values())-75
+    ybase=min(y for _,y in positions.values())-105
     top=ET.Element(namespace+"g",{"id":"stage-headings","aria-label":"Authored ordinal journey stages"})
     for sid in ordering:
         xs=groups[sid];center=(min(xs)+max(xs))/2
@@ -374,8 +377,8 @@ figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border
 #metro #stations circle{cursor:pointer;transition:opacity .16s}
 #metro #stations circle.subdued{opacity:.22}
 #metro #stations circle.selected-station{r:11;stroke:#fff4da!important;stroke-width:5!important}
-#metro #labels text{opacity:0;paint-order:stroke;stroke:#211b17;stroke-width:3.5}
-#metro #stage-headings text{paint-order:stroke;stroke:#211b17;stroke-width:2}
+#metro #labels text{opacity:0;font-size:23px;paint-order:stroke;stroke:#211b17;stroke-width:3.5}
+#metro #stage-headings text{font-size:29px;paint-order:stroke;stroke:#211b17;stroke-width:2}
 .toolbar{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;z-index:3;pointer-events:none}
 .filters,.camera{display:flex;gap:6px;align-items:center;flex-wrap:wrap;pointer-events:auto}
 .camera{margin-left:auto;justify-content:flex-end}
@@ -386,9 +389,9 @@ figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border
 .toolbar button:focus-visible,.toolbar select:focus-visible,aside button:focus-visible{outline:2px solid #f3c06a;outline-offset:2px}
 .toolbar button[aria-pressed="true"]{background:#efe4d4;color:#272019;border-color:#efe4d4}
 .group-label{color:#f5e9d9;font:600 11px 'Source Sans 3',Arial,sans-serif;background:#211b17df;padding:5px}
-.legend{position:absolute;left:16px;bottom:16px;z-index:2;max-width:min(490px,calc(100% - 32px));padding:9px 12px;background:#211b17e8;color:#dfd1c0;font-size:11px;line-height:1.55;pointer-events:none}
+.legend{position:absolute;left:16px;bottom:16px;z-index:2;max-width:min(650px,calc(100% - 32px));padding:9px 12px;background:#211b17e8;color:#dfd1c0;font-size:11px;line-height:1.55;pointer-events:none}
 .legend span{display:inline-block;width:19px;height:5px;vertical-align:middle;border-radius:2px;margin-right:5px}
-.legend strong{font-weight:600;color:#f6ecdf}
+.legend strong{font-weight:600;color:#f6ecdf;white-space:nowrap}
 .legend .subtle{color:#beb0a1}
 aside{position:absolute;z-index:4;right:15px;top:56px;bottom:18px;width:min(330px,calc(100% - 30px));background:#27211eec;color:#f6ebdd;border:1px solid #756759;padding:20px;overflow:auto;box-shadow:0 16px 40px #0007}
 aside[hidden]{display:none}
@@ -402,11 +405,14 @@ aside button{background:transparent;color:#f6ebdd;border:1px solid #8d7d71;borde
  header{padding:17px 15px 13px}h1{font-size:22px}
  main{padding:0}figure{height:calc(100dvh - 107px);min-height:430px;border-left:0;border-right:0}
  .toolbar{top:8px;left:8px;right:8px;gap:7px}
- .toolbar select{max-width:125px}
+ .toolbar{flex-direction:column;gap:6px}
+ .toolbar select{max-width:none;flex:1;min-width:0}
  .group-label{display:none}
- .filters{max-width:calc(100% - 110px)}
- .camera{max-width:110px}
+ .filters{width:100%;max-width:none;flex-wrap:nowrap}
+ .filters #labelToggle{position:absolute;left:0;top:37px}
+ .camera{position:absolute;top:37px;right:0;max-width:none;flex-wrap:nowrap;gap:5px}
  .toolbar button,.toolbar select{height:29px;padding:4px 6px}
+ #metro{margin-top:85px;height:calc(100% - 85px)}
  .legend{left:8px;bottom:8px;font-size:10px;padding:7px 9px}
  aside{top:80px;bottom:8px;right:8px}
 }
@@ -453,7 +459,7 @@ aside button{background:transparent;color:#f6ebdd;border:1px solid #8d7d71;borde
 __SVG__
 <div class="legend"><strong><span style="background:#f1729f"></span>A&E / EPC</strong> &nbsp;
 <strong><span style="background:#3bc9de"></span>Direct customer</strong> &nbsp;
-<span class="subtle">Other colored tracks show authored activity routes. Station rings identify research layers. Highlight a route or layer to inspect it.</span></div>
+<span class="subtle">Other tracks show related activities. Station rings show research layers.</span></div>
 <aside id="inspector" aria-live="polite" hidden><button id="closeInspector" aria-label="Close details">×</button>
 <div id="inspectorBody"></div></aside>
 </figure></main>
@@ -481,11 +487,33 @@ function fitStations(ids){
  setView((minx+maxx-w)/2,(miny+maxy-h)/2,w,h);
 }
 function updateLabels(){
- const scale=home.w/vb.width;
- for(const t of labels){
+ const pixelFont=23*svg.clientWidth/Math.max(1,vb.width);
+ const anchors=new Set(["eq01","eq10","eq16","eq31","eq37","eq39","eq59","eq64","eq67"]);
+ const blocked=[...svg.querySelectorAll("#stage-headings text")].map(t=>t.getBoundingClientRect());
+ const placed=[];
+ const overlaps=(a,b)=>a.left<b.right+3&&a.right+3>b.left&&
+                         a.top<b.bottom+3&&a.bottom+3>b.top;
+ const candidates=labels.map(t=>{
    const m=data.moments[t.dataset.stationId];
-   const prominent=m && (m.decision||m.id==="eq01"||m.id==="eq67"||m.links.some(e=>e.kind==="handoff"));
-   t.style.opacity=(expandedLabels||scale>=2.5||scale>=1.55&&m?.key||prominent)?1:0;
+   const tier=anchors.has(m?.id)?0:m?.decision?1:m?.key?2:3;
+   return {t,m,tier};
+ }).sort((a,b)=>a.tier-b.tier);
+ const bounds=svg.getBoundingClientRect();
+ for(const {t,m,tier} of candidates){
+   let eligible=tier===0;
+   if(pixelFont>=10.5)eligible ||= tier===1;
+   if(pixelFont>=13)eligible ||= tier===2;
+   if(pixelFont>=19)eligible=true;
+   if(expandedLabels)eligible ||= (tier<=2&&pixelFont>=9.5);
+   if(!eligible){t.style.opacity=0;continue}
+   t.style.opacity=1;
+   const r=t.getBoundingClientRect();
+   if(r.width===0||r.height===0||r.left<bounds.left+5||
+      r.right>bounds.right-5||r.top<bounds.top+5||r.bottom>bounds.bottom-5||
+      blocked.some(q=>overlaps(r,q))||placed.some(q=>overlaps(r,q))){
+     t.style.opacity=0;continue;
+   }
+   placed.push(r);
  }
 }
 function focus(){
@@ -521,7 +549,7 @@ document.addEventListener("fullscreenchange",()=>requestAnimationFrame(()=>{
 }));
 const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({
  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-for(const c of circles)c.addEventListener("click",()=>{
+for(const c of circles){c.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();c.dispatchEvent(new MouseEvent("click",{bubbles:true}))}});c.addEventListener("click",()=>{
  const mid=c.dataset.stationId,m=data.moments[mid];if(!m)return;
  selectedId=mid;
  for(const other of circles)other.classList.toggle("selected-station",other===c);
@@ -533,7 +561,7 @@ for(const c of circles)c.addEventListener("click",()=>{
  (m.evidenceRefPresent?' · source reference present':' · no linked source in public fixture')+'</b></div>'+
  '<div class="field"><small>Authored source relationships</small><p>'+m.links.map(e=>
  escapeHtml(e.id+' · '+e.kind+' · '+e.from+' → '+e.to)).join('<br>')+'</p></div>';
-});
+});}
 document.querySelector("#closeInspector").onclick=()=>{
  ins.hidden=true;selectedId=null;
  for(const c of circles)c.classList.remove("selected-station");
@@ -547,10 +575,10 @@ svg.addEventListener("pointermove",e=>{
  if(!drag)return;
  vb.x-=(e.clientX-drag[0])/svg.clientWidth*vb.width;
  vb.y-=(e.clientY-drag[1])/svg.clientHeight*vb.height;
- drag=[e.clientX,e.clientY];updateLabels();
+ drag=[e.clientX,e.clientY];
 });
-svg.addEventListener("pointerup",()=>{drag=null;svg.classList.remove("grabbed")});
-svg.addEventListener("pointercancel",()=>{drag=null;svg.classList.remove("grabbed")});
+svg.addEventListener("pointerup",()=>{drag=null;svg.classList.remove("grabbed");updateLabels()});
+svg.addEventListener("pointercancel",()=>{drag=null;svg.classList.remove("grabbed");updateLabels()});
 svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.89)},{passive:false});
 if(window.innerWidth<760){
  const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
