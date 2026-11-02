@@ -159,6 +159,7 @@ def test_native_dark_compatible_viewer_removes_timetable_affordances(source):
     # viewer. The mode-specific presentation only hides train/passenger controls.
     script = Path(__file__).resolve().parents[1] / "bin/mjourney-preview"
     # Extensionless script can be loaded with a SourceFileLoader.
+    import importlib.util
     from importlib.machinery import SourceFileLoader
     loader = SourceFileLoader("mjourney_preview", str(script))
     mod_spec = importlib.util.spec_from_loader(loader.name, loader)
