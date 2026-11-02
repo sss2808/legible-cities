@@ -56,3 +56,25 @@ The branch workflow also captures real Chromium desktop and mobile screenshots. 
 8. Integrate only after approval into the existing six-chapter Network, Structure, Journey, Overview, Personas and Evidence progression, preserving one sample graph and stable public-local IDs. Do not reinstate the retired Spatial view or replace the scrollytelling with a static picture.
 
 No merge, publication, deployment, portfolio modification or product replacement is authorized by this experiment.
+
+
+## Follow-up after LA Metro REA deep-dive and owner screenshots
+
+Reference: `docs/MJOURNEY_REA_LA_METRO_DEEP_DIVE_2026-11-02.md` on the underlying REA branch. The owner judged V7's greater source-backed network density to be an improvement while flagging camera faults, missing mode controls, small jagged bends and distracting public copy.
+
+The standalone now exposes **Schematic** and **Linear** as two representations of the same canonical sanitized moments. Schematic retains the native Legible Cities rendered paths; Linear repeats those same canonical IDs in route-specific ordered rows and does not synthesize connections or infer time. The alternative Geographic mode seen in LA Metro remains intentionally absent because M-Journey lacks authentic geographic coordinates. The existing six-chapter portfolio sequence is also distinct from these map modes.
+
+Camera behavior now has one `setView` owner, an aspect-correct `fitVisible` derived from native SVG track and station bounds, a 45% baseline minimum for short-focused routes, bounded zoom at 28%-110% of the initial full-network fitted width, and a Fit button that refits the currently selected content. Opening the station inspector from labels, stations or Linear stops does not change camera geometry. Fullscreen and resize re-fit with the same camera model.
+
+The rejected deterministic seed no longer jitters canonical research stations vertically according to numeric IDs. Each authored connection now uses at most one 45-degree octilinear bend if one is required, and source-layer spacing is more compact. This is a **seed-layout readability change**, not acceptance or replacement of native LOOM solver geometry; no source edges, endpoints or line occupancy were altered. The native candidate must still pass the original audit gates. Preserving occasional purposeful angular turns is consistent with the REA reference. Rendering a loop/transfer that is not authored remains prohibited.
+
+The public legend now contains only two useful pathway keys, with redundant explanatory prose removed. Additional activity routes retain names in the Route control and Linear rows. The inspector remains available for research metadata and source relationships.
+
+### Explicit follow-up gates
+
+- View switch toggles active pressed states, keeps IDs stable, supports both desktop and mobile, and renders all 11 ordered route rows in Linear.
+- Route focus and research-layer filters produce content-relative Fit bounds without extreme closeups; repeated zoom-out never shrinks the map below readable baseline.
+- Clicking a station name only opens its inspector, not zoom or selection-driven camera movement.
+- Schematic seed has no arbitrary same-layer 16-unit jitter; no unsupported node or interchanges are added.
+- Chromium screenshots and exact-head behavior tests must be reviewed. Passing browser assertions alone does not approve visual legibility.
+- **Not yet implemented**: REA arbitrary A+B multi-route selection, route-level framing on very small mobile displays, full SVG label-collision visual approval, native LOOM acceptance and final portfolio integration.
