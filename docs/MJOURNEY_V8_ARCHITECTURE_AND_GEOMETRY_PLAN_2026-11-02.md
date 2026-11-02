@@ -4,6 +4,12 @@
 
 ## Source evidence reviewed
 
+7. [Draft PR #7](https://github.com/sss2808/legible-cities/pull/7) and [LOOM topology source-integrity audit](https://github.com/sss2808/legible-cities/blob/docs/loom-topology-source-integrity-2026-11-02/docs/LOOM_TOPOLOGY_NONDETERMINISM_SOURCE_INTEGRITY_2026-11-02.md), plus [PR #6 follow-up comment](https://github.com/sss2808/legible-cities/pull/6#issuecomment-6590200990). PR #7 is a **documentation-only**, independent branch based on PR #6, not an implementation already integrated into V7 or V8.
+8. [Upstream CONTRIBUTING.md](https://github.com/richc117/legible-cities/blob/main/CONTRIBUTING.md), particularly the actual environment and skip-prone CI testing scope.
+9. Upstream staged examples: [02_build_line_graph.ipynb](https://github.com/richc117/legible-cities/blob/main/notebooks/02_build_line_graph.ipynb), [03_schematize.ipynb](https://github.com/richc117/legible-cities/blob/main/notebooks/03_schematize.ipynb) and [04_render_svg.ipynb](https://github.com/richc117/legible-cities/blob/main/notebooks/04_render_svg.ipynb). These are *executable illustrative examples* without stored cell outputs in the reviewed files; their printed values must not be invented or reported as V8 results.
+10. [Upstream LOOM issue #44](https://github.com/ad-freiburg/loom/issues/44) and the [maintainer confirmation](https://github.com/ad-freiburg/loom/issues/44#issuecomment-5681272160). The upstream report observed semantic-topology variation for macOS native runs; eight Linux control runs were stable. Neither observation proves repeatability on every platform.
+
+
 1. [Upstream Legible Cities architecture](https://github.com/richc117/legible-cities/blob/main/docs/ARCHITECTURE.md), including the layout store, nondeterminism, CRS, render/labels/offsets, viewer controls, and export rules. Fetched upstream blob `a27fa09aa73cf46694572e358be084121d3b5183` on 2026-11-02.
 2. [Exact-head Actions run 41537372455](https://github.com/sss2808/legible-cities/actions/runs/41537372455), with both source-seed and real native C++ LOOM jobs passing on PR #6 head `8e3fce120dbdb7b392813b354051995c9f5c770b`. The native log asserts accepted optimized geometry rather than an unrecognized fallback.
 3. [Specific PR #4 comment 6590112859](https://github.com/sss2808/legible-cities/pull/4#issuecomment-6590112859), which summarizes the exact coordinate correction, its residual constraints, and detailed native audit.
@@ -117,3 +123,74 @@ Other agents may deliver further research. Update this plan by appending sourced
 5. Source-specific permissions and licensing for the original map SVGs remain for review before any portfolio publication.
 
 **Planning rule:** correctness gates first, composition/interaction second, optional polish last. A visually convincing map that alters research adjacency fails, and a mathematically valid map that still looks like a jagged corridor is not finished.
+
+
+## V8 addendum: PR #7, upstream notebooks and contributor testing requirements
+
+**Added 2026-11-02.** This section refines the prior work packages without claiming any implementation has occurred. Preserve the distinctions between original upstream GTFS pipeline behavior, the currently restricted M-Journey research adapter and proposed V8 quality gates.
+
+### 1. The semantics of the pipeline are narrower than the word “schematization”
+
+The upstream notebooks provide a useful inspection order:
+
+| Stage | Upstream notebook observation | V8 diagnostic question |
+| --- | --- | --- |
+| `gtfs2graph` | Creates a GTFS-derived GeoJSON line graph; **not applicable** to canonical authored research records | Is our explicitly versioned adapter generating exactly the authorized stations and selected directed relations? |
+| `topo` | Merges overlapping track/platforms, potentially removing separate stop identities | Leave disabled; would any merge remove or fabricate a research station, connection, membership or handoff? |
+| `loom` | Solves line ordering on existing edges without changing geometric centerlines | Are shared-track occupancy and per-edge ordered route labels correct? Do not expect this stage alone to remove jagged elbows |
+| `octi` | Moves/schematizes coordinates onto a supported base graph/grid | Are stage ordering, source adjacency, bend count and length-weighted 0°/45°/90°/135° quality acceptable? |
+| `schematic.render` | Draws one addressed SVG path per (line, edge) with native parallel offsets, station glyphs and oriented-box labels | Do offset changes and label collision occur here rather than in the optimized centerline? |
+
+From [notebook 02](https://github.com/richc117/legible-cities/blob/main/notebooks/02_build_line_graph.ipynb), compare `station_id` and `station_label` after schematization and enumerate all edges carrying more than one line. Record the *authored-source* to *post-solver* correspondence; a stop ID lost by transit-platform merging is unacceptable for M-Journey absent an explicitly approved source mapping.
+
+From [notebook 03](https://github.com/richc117/legible-cities/blob/main/notebooks/03_schematize.ipynb), measure angles **after** `to_mercator`, length-weighted. The notebook demonstrates `octi -b` choices `octilinear`, `orthoradial`, `ortholinear`, and also names `hexalinear`. Treat other bases strictly as separately audited *visual-layout experiments*; a visually appealing ring or orthoradial form is not evidence for an authored customer lifecycle loop.
+
+From [notebook 04](https://github.com/richc117/legible-cities/blob/main/notebooks/04_render_svg.ipynb), draw the **same accepted octi graph** both with `schematic.render.render` and LOOM's `transitmap -l` for a diagnostic, never as two parallel production map engines. Differences in junction appearance, parallel-track stroke order and label placement help localize whether the defect is in solver centerlines versus M-Journey's renderer/offsets. The reference viewer requires native stable SVG path identity; preserve canonical IDs for source reconstruction.
+
+### 2. Source certificate is not the same as a pretty, byte-stable layout
+
+PR #7 further tightens our P0 requirements:
+
+- Persist a **frozen source manifest** *before* running a solver. Store directed `sourceEdgeId → fromId/toId`, the ordered station and stage/layer fields, authorized visual line IDs, route membership *on every selected source edge*, and which links are traversable versus merely dependency/feedback annotations.
+- Validate **exact station identity and cardinality** and **per-connection ordered line membership**. Comparing only a set of readable labels or undirected adjacency, as in the proof, is insufficient. Source direction may live in the immutable projection manifest even when LOOM treats rendered track geometry as undirected.
+- Normalize away **geometry-only helper vertices** when comparing source station adjacency, while retaining all geometry details in the layout artifact. Helper-node-pointer reshuffles must pass the semantic gate; dropped/added stations, source adjacencies, unauthorized handoffs, altered line occupancy, or stage regressions fail.
+- Keep **two distinct hashes**: an input/cache identifier derived from input and build configuration; and **an output digest** over the exact accepted layout/render files. Neither the input ID nor raw byte JSON comparison across independently optimized runs establishes topology identity. Save a separate stable **semantic fingerprint** of station identities, normalized source/route connectivity and ordered line memberships, excluding transient pointer IDs.
+- A solver run must report `solver_attempted`, `solver_accepted`, `fallback_used` and `presented_artifact_id` independently. An optimizer exit status cannot promote a rejected native result; a source-preserving fallback may be displayed as *diagnostic*, but never masquerades as accepted optimized geometry.
+- Archive **every** attempted candidate, including all intermediate stage outputs, rejected stages and exact failures, and keep accepted outputs in immutable durable storage. PR #7 reports **14-day artifact retention** for its underlying 23-station proof. Prior V7 workflows may set other expiration windows; inspect each workflow rather than treating any GitHub Actions archive as permanent.
+- Record the exact LOOM source commit SHA, OS/architecture, compiler/solver backend, all stage arguments, source/adapter SHA and input/output digests. Do not depend on moving branch heads or on `SCHEMATIC_LOOM_COMMIT` alone as a guarantee that a recomputed layout equals the approved output.
+
+**Repeat-run matrix:** Run the frozen V8 adapter input ten times through `loom → octi` on the pinned native configuration, and save/compare each run separately. Include semantic graph fingerprints, geometry differences, stage integrity and weighted octilinearity. Only if a concrete need arises, run `topo` in an isolated experiment across the intended operating systems; in upstream [issue #44](https://github.com/ad-freiburg/loom/issues/44), macOS variants differed semantically, while an eight-run Ubuntu control did not. A stable ten-run sample is **not** a deterministic guarantee.
+
+**Negative regression fixtures:** a missing authorized edge (fail), a newly added transfer (fail), two merged research stations (fail), a duplicated `station_id` (fail), a per-edge line membership/order change where the order is prescribed (fail), a backward stage move (fail), and a helper-vertex-pointer/ID relabel with invariant canonical graph (pass). Build these as explicit automated cases, not merely code review checklist items.
+
+### 3. Explicit test coverage is mandatory: a green CI badge is not enough
+
+[Upstream CONTRIBUTING.md](https://github.com/richc117/legible-cities/blob/main/CONTRIBUTING.md) states that its standard workflow can skip feed-, stored-layout-, native-LOOM-, real-map-, ffmpeg- and capture-dependent tests when fixtures are unavailable. This is an upstream **coverage warning**, not evidence that any particular M-Journey CI run skipped those tests.
+
+- Use pinned Python 3.12+ dependency setup (`uv sync --locked --extra dev` in the original project), and report test **executed/pass/fail/skip** counts and named skip reasons using `pytest -q -rs`. A green suite with missing solver/capture dependencies is an incomplete V8 acceptance record.
+- Build actual native LOOM and explicitly run the dedicated V8 stage/identity/negative-provenance suite. Verify the source manifest, `solver_accepted=true`, source edge membership, direction and stage constraints in an exact-head CI job. Do not allow `solver_accepted=false` with success exit to satisfy the *native acceptance* job.
+- Run **full Chromium** for picture/presentation QA when reproducing upstream screenshot behavior; CONTRIBUTING distinguishes it from the headless shell because rasterization can differ. Include 1440×900 desktop, ~390×844 mobile, native fullscreen, Schematic/Linear, A-only, B-only, A+B and labels on/off.
+- Perform browser accessibility audit (`bin/audit-page`/axe as supported) on the actual tested generated page. Check keyboard route selectors, inspector and fullscreen controls, contrast and reduced-motion behavior.
+- For changes to upstream renderer/engine or integrated atlas behaviors, follow the original's **real-data** regression method: build LA Metro, Pittsburgh T and CDMX and inspect changes to station, line, matched stop and dropped-label counts, reviewing all skips. Keep this separate from V8's research-fixture-only tests.
+- Image comparisons must use **RGB channel differences and a tolerance**, never raw PNG file hashes or RGBA-alpha-only checks. Put actual screenshot files, environment and dynamic state beside results. Zero `dropped_labels` does not prove human legibility.
+
+### 4. Updated execution order and decision gates
+
+| Priority | Concrete addition to existing V8 plan | Definition of done |
+| --- | --- | --- |
+| **P0a** | Merge *conceptually* the PR #7 canonical source certificate into the proposed V8 adapter validator | Stable source moment IDs, directed source edge ID, exact authorized line memberships per edge, ordinal stages and layer properties all audited; negative tests behave as expected |
+| **P0b** | Integrate proven PR #6 Mercator bridge and weighted octilinearity without modifying research topology | 59/68 V8 tests explicitly pass, no legacy approximation, all solver-created polyline vertices retained |
+| **P0c** | Implement immutable candidate/output bundle and differentiate input, semantic and accepted-output fingerprints | Replaying accepted geometry never implicitly re-invokes LOOM; fallback is visibly diagnostic, rejected stages persisted |
+| **P0d** | Add executed-vs-skipped CI evidence plus pinned real native and browser jobs | Native acceptance cannot silently skip; logs/manifest report actual runs and dependency versions |
+| **P1a** | Profile geometry at `loom`, `octi` and renderer separately; compare `schematic.render` with LOOM `transitmap` on identical accepted graphs | Bend/offset/label defects localized to the responsible stage before any styling changes |
+| **P1b** | Evaluate low-bend, stage-constrained candidates and complete multi-route Schematic/Linear camera/interaction parity | Topology unchanged, A+B focus and Fit tested, priority labels and junctions visually reviewed |
+| **P2** | Apply editorial visual style, animation and portfolio integration after correctness plus usability approval | No invented geographic mode, passenger/time metaphor, decorative technical claims or loss of original six-chapter portfolio narrative |
+
+**Dependencies:** The candidate validator and source certificate gate all later cartographic output. The exact coordinate bridge and immutable output audit are independent P0 tasks and can be implemented on separate draft branches, but their final combined test must cover 59 moments and 68 chosen edges. Only then choose a composed Schematic. Do not interpret PR #6's green 23-station CI as a passed 59-station V8 geometry run.
+
+### 5. Coordination notes for the other agents
+
+- PR #7 is already documentation only; avoid copying it verbatim as a second competing source-of-truth document. This addendum links its additional acceptance requirements into the existing V8 plan and leaves both originals intact.
+- Treat the notebooks as **stage-by-stage debugging recipes** that use public GTFS, not direct algorithms for generating authorized research connections. Notebook 02's `topo` example is explicitly **not** permission to enable that stage in V8.
+- Compare source, line-order, optimized geometry, SVG offsets, and browser camera in that order before writing CSS tweaks. Source integrity and optimized geometry acceptance are different from meeting the visual design bar.
+- No source research fixture edits, new routes, merges/deployments, portfolio/product modifications, or reintroduction of the retired Spatial view are authorized by this planning update.
