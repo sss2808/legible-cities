@@ -204,3 +204,26 @@ def test_b2b_starter_cross_channel_regression_is_source_backed():
                                                           label_color="#f2ede6"))
     assert set(result.colors) == set(out.graph.labels)
     assert "<svg" in result.svg
+
+
+
+def test_system_v3_categories_are_continuous_without_travel_claims(source):
+    out = mjourney.build_system_v3(source)
+    assert len(out.graph.stations) == 67
+    assert len(out.graph.labels) == 7
+    assert len(out.audit["projection"]["stageRanges"]) == 10
+    assert out.audit["projection"]["traversableGuides"] == 0
+    assert out.audit["projection"]["inferredTransfers"] == 0
+    assert sum(len(v) for v in out.audit["projection"]["lineMemberships"].values()) == 67
+    for e in out.graph.edges:
+        assert e.props["traversable"] is False
+        assert e.props["projectionRole"] == "non-traversable-category-guide"
+        assert out.graph.nodes[e.src].props["layerIds"] == [e.props["layerId"]]
+        assert out.graph.nodes[e.dst].props["layerIds"] == [e.props["layerId"]]
+    assert len(out.audit["projection"]["lifecycleReturnIds"]) == 1
+    result = svg_renderer.render(out.graph, width=1850,
+                                 style=svg_renderer.Style(background="#1f1915",
+                                     label_color="#f2ede6"))
+    assert len(result.colors) == 7
+    assert "<svg" in result.svg
+    assert len(animate.build(result, out.graph, [], date=dt.date(2026, 11, 2)).to_json()["linear"]["lines"]) == 7
