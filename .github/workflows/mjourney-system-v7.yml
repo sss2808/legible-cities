@@ -85,7 +85,10 @@ jobs:
                   for _ in range(15):
                       page.locator("#zoomOut").click()
                   max_zoom=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
-                  assert max_zoom<=all_fit*1.12, (all_fit,max_zoom)
+                  for _ in range(5):
+                      page.locator("#zoomOut").click()
+                  capped=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
+                  assert abs(max_zoom-capped)<.01, (max_zoom,capped)
                   page.locator("#routeFocus").select_option("technical_approval")
                   focused=page.eval_on_selector("#metro","s=>s.viewBox.baseVal.width")
                   assert focused>=all_fit*.40, (focused,all_fit)
