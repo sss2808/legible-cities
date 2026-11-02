@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"src"))
 from schematic import loom
 from schematic.linegraph import Edge, Line, LineGraph, Node
-from schematic.render import Style, render
+from schematic.render import Style, render, octilinearity
 
 LINES={
   "ae_epc_mediated":Line("ae_epc_mediated","A&E / EPC mediated","#ef6394"),
@@ -170,14 +170,21 @@ def stage_review(graph,source):
             "present":present,"fullCanonicalStageCount":len(source["stages"])}
 
 def poly_review(graph):
-    bad=[]
-    for index,e in enumerate(graph.edges):
-        for a,b in zip(e.geometry,e.geometry[1:]):
-            dx=abs(a[0]-b[0]);dy=abs(a[1]-b[1])
-            if min(dx,dy)>3 and abs(dx-dy)>3:
-                bad.append({"edgeIndex":index,"dx":round(dx,2),"dy":round(dy,2)})
-    return {"octilinear":not bad,"violations":bad[:20],
+    """Use the original renderer's length-weighted projected-angle diagnostic.
+
+    Tiny rounding stubs from LOOM's lon/lat GeoJSON must not dominate the
+    test, but a significant total length at non-45-degree angles must fail.
+    The graph has already been restored to *isotropic* diagram coordinates
+    through the exact Mercator inverse in mjourney_projection.
+    """
+    correct, total = octilinearity(graph, tol_deg=1.0)
+    fraction = correct / total if total else 0.0
+    return {"octilinear":fraction >= 0.995,
+            "lengthWeightedFraction":round(fraction,8),
+            "minimumAcceptedFraction":0.995,
+            "angleToleranceDegrees":1.0,
             "polylinePoints":sum(len(e.geometry) for e in graph.edges)}
+
 
 def native_geometry(seed,source,path,timeout):
     geo=to_solver(seed).to_geojson()
