@@ -1,0 +1,84 @@
+name: M-Journey P0a canonical source certificate
+on:
+  push:
+    branches: [feature/mjourney-v8-p0a-source-certificate]
+  pull_request:
+    branches: [docs/mjourney-v8-architecture-plan-2026-11-02]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install original engine and unittest requirements
+        run: python -m pip install -e .
+      - name: Execute P0a negative and positive provenance regression tests
+        run: |
+          python -m unittest discover -s tests -p 'test_mjourney_source_integrity.py' -v
+      - name: Certify unchanged original 67/87 and displayed 59/68 projection
+        run: |
+          python bin/mjourney-source-certificate \
+            --output out/p0a-source-certificate.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("out/p0a-source-certificate.json").read_text())
+          m=p["manifest"]
+          assert m["schema"]=="mjourney-source-certificate/v1"
+          assert m["canonicalCounts"]=={"moments":67,"relations":87,"stages":10,"layers":7}
+          assert m["projectionCounts"]=={"moments":59,"relations":68,"lines":11}
+          assert p["canonicalReview"]["passed"]
+          assert p["v7SeedReview"]["passed"]
+          assert p["v7SeedReview"]["sourceEdgeProvenanceVerified"]
+          assert p["nativeOptimizationAttempted"] is False
+          assert len(m["projection"]["edges"])==68
+          print("P0a SOURCE CERTIFICATE PASS. NO NATIVE GEOMETRY CLAIM.")
+          PY
+      - name: Verify candidate graph CLI fails closed
+        run: |
+          python - <<'PY'
+          import json,runpy
+          from pathlib import Path
+          from schematic.linegraph import Edge,Line
+          src=json.loads(Path("fixtures/mjourney/equipment-sanitized-v1.json").read_text())
+          v=runpy.run_path("bin/mjourney-system-network")
+          graph=v["assemble"](src)
+          Path("out/p0a-source-projection.geojson").write_text(json.dumps(graph.to_geojson()))
+          graph.edges.append(Edge(src="eq01",dst="eq67",
+              geometry=[graph.nodes["eq01"].coord,graph.nodes["eq67"].coord],
+              lines=[Line("direct_customer_led","Direct customer-led")],
+              props={"sourceEdgeIds":["unapproved"],"sourceKind":"handoff"}))
+          Path("out/p0a-rejected-transfer.geojson").write_text(json.dumps(graph.to_geojson()))
+          PY
+          python bin/mjourney-source-certificate \
+            --candidate out/p0a-source-projection.geojson \
+            --output out/p0a-accepted-projection.json
+          if python bin/mjourney-source-certificate \
+              --candidate out/p0a-rejected-transfer.geojson \
+              --output out/p0a-rejected-transfer-audit.json; then
+            echo "ERROR: forged source transfer was accepted" >&2
+            exit 1
+          fi
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ok=json.loads(Path("out/p0a-accepted-projection.json").read_text())
+          bad=json.loads(Path("out/p0a-rejected-transfer-audit.json").read_text())
+          assert ok["candidateReview"]["passed"]
+          assert not bad["candidateReview"]["passed"]
+          assert any("unapproved" in e for e in bad["candidateReview"]["errors"])
+          print("SOURCE-EDGE PROVENANCE REJECTION PASS")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-p0a-source-certificate-and-regressions
+          path: |
+            out/p0a-*.json
+          retention-days: 30
