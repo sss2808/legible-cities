@@ -74,7 +74,7 @@ jobs:
           assert a["projection"]["displayMoments"]==23
           assert a["integrity"]["stationAdjacencyPreserved"]
           assert a["integrity"]["stagePreserved"]
-          assert a["solver"]["attempted"]
+          assert a["solver"]["attempted"] and a["solver"]["used"], "Do not approve seed fallback as optimized native LOOM geometry"
           print("LOOM disposition:",a["solver"]["reviewStatus"])
           PY
       - uses: actions/upload-artifact@v4
