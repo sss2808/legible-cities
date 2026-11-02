@@ -112,3 +112,72 @@ def test_original_fork_renderer_and_empty_timetable_can_read_projection(source):
     assert len(data["linear"]["lines"]) == 7
     # Timetable controls and route finding still require a dedicated no-service
     # viewer mode. Do not deploy this generated test page in the portfolio.
+
+
+
+def test_source_connected_full_network_is_octilinear_and_has_no_invented_edges(source):
+    out = mjourney.build_network_projection(source, full=True)
+    originals = {e["id"]: e for e in source["connections"]}
+    assert len(out.graph.nodes) == 67
+    assert len(out.graph.edges) == 83
+    assert len(out.graph.labels) == 7
+    assert out.audit["projection"]["crossLayerConnectionCount"] == 61
+    assert out.audit["projection"]["inferredConnections"] == 0
+    assert len(out.audit["projection"]["excludedConnections"]) == 4
+    for edge in out.graph.edges:
+        assert len(edge.props["sourceEdgeIds"]) == 1
+        original = originals[edge.props["sourceEdgeIds"][0]]
+        assert (edge.src, edge.dst) == (original["fromId"], original["toId"])
+        assert original["kind"] in {"sequence", "branch", "convergence", "handoff"}
+        assert edge.props["projectionRole"] == "authored-directed-journey-connection"
+        assert edge.props["crossLayer"] == (
+            out.graph.nodes[edge.src].props["layerId"] !=
+            out.graph.nodes[edge.dst].props["layerId"]
+        )
+        assert edge.geometry[0] == out.graph.nodes[edge.src].coord
+        assert edge.geometry[-1] == out.graph.nodes[edge.dst].coord
+        for a, b in zip(edge.geometry, edge.geometry[1:]):
+            dx, dy = abs(b[0] - a[0]), abs(b[1] - a[1])
+            assert dx < 1e-6 or dy < 1e-6 or abs(dx - dy) < 1e-6
+
+
+def test_source_connected_focused_network_still_has_real_cross_swimlane_routes(source):
+    out = mjourney.build_network_projection(source)
+    selected = set(out.audit["projection"]["renderedEdgeIds"])
+    assert len(selected) < 83
+    assert len(out.graph.nodes) >= 40
+    assert out.audit["projection"]["crossLayerConnectionCount"] >= 30
+    for edge in out.graph.edges:
+        assert edge.props["sourceEdgeIds"][0] in selected
+        assert edge.props["traversable"] is True
+    assert not any(e.props.get("sourceKind") in {"dependency", "lifecycle_return"}
+                   for e in out.graph.edges)
+
+
+def test_native_dark_compatible_viewer_removes_timetable_affordances(source):
+    # The HTML is still the original Legible Cities interactive Schematic/Linear
+    # viewer. The mode-specific presentation only hides train/passenger controls.
+    script = Path(__file__).resolve().parents[1] / "bin/mjourney-preview"
+    # Extensionless script can be loaded with a SourceFileLoader.
+    from importlib.machinery import SourceFileLoader
+    loader = SourceFileLoader("mjourney_preview", str(script))
+    mod_spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(mod_spec)
+    loader.exec_module(module)
+    out = mjourney.build_network_projection(source)
+    result = svg_renderer.render(out.graph, width=1850,
+                                 style=svg_renderer.Style(themed=True,
+                                                          background="#1f1915",
+                                                          label_color="#f2ede6"))
+    anim = animate.build(result, out.graph, [], date=dt.date(2026, 11, 2))
+    html = module.viewer_for_journey(animate.texts(
+        anim, result.svg, stem="mjourney", title="M-Journey",
+    )["mjourney.html"])
+    assert 'data-mjourney' in html
+    assert 'id="view-map"' in html
+    assert 'id="view-linear"' in html
+    assert 'id="line-toggles"' in html
+    assert 'id="labels-toggle"' in html
+    assert 'header .bar:nth-of-type(2)' in html
+    assert 'e.stopImmediatePropagation()' in html
+    assert not anim.trips
