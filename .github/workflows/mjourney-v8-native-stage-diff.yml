@@ -75,6 +75,30 @@ jobs:
           print("FIRST HARD GATE FAILURE:",report["firstHardGateFailure"])
           print("SAVED STAGE-BY-STAGE DIAGNOSTICS")
           PY
+      - name: Probe documented octi contraction and movement constraints
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-octi-constraint-probe \
+            --loom out/stage-diff-native.loom.geojson \
+            --output out/stage-diff-octi-variants.json \
+            --timeout 120
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path("out/stage-diff-octi-variants.json").read_text())
+          assert r["schema"]=="mjourney-octi-constraint-probe/v1"
+          assert r["selectedCandidate"] is None and r["noAutoPromotion"]
+          assert len(r["variants"])==5
+          for name,v in r["variants"].items():
+              if v["accepted"]:
+                  assert v["perLineAdjacencyPreserved"]
+                  assert v["stageOrderPreserved"]
+                  assert v["stationIdentityPreserved"]
+                  assert v["weightedOctilinearity"]>=0.995
+          print("CONFIGURATION PROBES COMPLETED (NO GEOMETRY AUTO-PROMOTION)")
+          print("Candidate names:",r["acceptedCandidatesForOwnerReview"])
+          PY
       - name: Native source integrity acceptance gate
         run: |
           python - <<'PY'
@@ -96,5 +120,6 @@ jobs:
           path: |
             out/stage-diff-*.json
             out/stage-diff-native.*
+            out/stage-diff-octi-variants.*
             out/stage-diff-loom-commit.txt
           retention-days: 30
