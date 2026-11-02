@@ -21,7 +21,11 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"src"))
 from schematic import loom
 from schematic.linegraph import Edge, Line, LineGraph, Node
-from schematic.render import Style, render
+from schematic.render import Style, render, octilinearity
+from schematic.mjourney_projection import to_solver_point, from_solver_point
+from schematic.mjourney_source_integrity import (
+    build_source_manifest, validate_projection_graph,
+)
 
 # Visual transit-line identities describe explicit continuous edge chains. These
 # are not automatically customer personas, organizational workstreams or transfers.
@@ -140,21 +144,17 @@ def assemble(source):
                      "traversable":False}))
     return LineGraph(nodes,drawn)
 
-# Native LOOM works in geographic input but optimizes 45-degree angles in a
-# locally projected metric plane. Longitude degrees at latitude 48° are shorter
-# than latitude degrees by cos(48°). Never treat lon/lat degrees as isotropic
-# screen coordinates, or valid LOOM diagonals look 1.49:1 after reprojecting.
-_LOCAL_LONGITUDE_SCALE=math.cos(math.radians(48.0))
-
+# The diagram axes are synthetic ordinal layout units, never locations.
+# LOOM ingests WGS84 but optimizes in Web Mercator metres. Reuse the exact
+# reversible bridge from verified PR #6. No approximate latitude scaling.
 def to_solver(graph):
-    """Stage-constrained seed into a local metric-equivalent lon/lat domain."""
-    return graph.reproject(lambda p:(8+p[0]/(2500*_LOCAL_LONGITUDE_SCALE),
-                                      48+p[1]/2500))
+    return graph.reproject(to_solver_point)
+
 
 def from_solver(graph):
-    """Restore the same local metric axes without rebuilding solver polylines."""
-    return graph.reproject(lambda p:((p[0]-8)*2500*_LOCAL_LONGITUDE_SCALE,
-                                      (p[1]-48)*2500))
+    # Preserve every intermediate point introduced by native loom/octi.
+    return graph.reproject(from_solver_point)
+
 
 def adjacency(graph):
     # Stops joined via geometry-only junctions count as adjacent iff the
@@ -200,16 +200,22 @@ def stage_review(graph,source):
             "present":present,"fullCanonicalStageCount":len(source["stages"])}
 
 def poly_review(graph):
-    bad=[]
-    for index,e in enumerate(graph.edges):
-        for a,b in zip(e.geometry,e.geometry[1:]):
-            dx=abs(a[0]-b[0]);dy=abs(a[1]-b[1])
-            if min(dx,dy)>3 and abs(dx-dy)>3:
-                bad.append({"edgeIndex":index,"dx":round(dx,2),"dy":round(dy,2)})
-    return {"octilinear":not bad,"violations":bad[:20],
-            "polylinePoints":sum(len(e.geometry) for e in graph.edges)}
+    """The upstream renderer's projected length-weighted octilinearity gate.
 
-def native_geometry(seed,source,path,timeout):
+    Reject a nonempty solved graph unless >=99.5% of geometric length falls
+    within one degree of an octilinear (45-degree multiple) direction.
+    """
+    ok,total=octilinearity(graph,tol_deg=1.0)
+    fraction=ok/total if total>0 else 0.0
+    return {"octilinear":math.isfinite(fraction) and total>0 and fraction>=0.995,
+            "lengthWeightedFraction":round(fraction,8),
+            "minimumAcceptedFraction":0.995,"angleToleranceDegrees":1.0,
+            "acceptedLength":round(ok,4),"totalLength":round(total,4),
+            "polylinePoints":sum(len(e.geometry) for e in graph.edges),
+            "method":"schematic.render.octilinearity in exact diagram metric axes"}
+
+
+def native_geometry(seed,source,path,timeout,manifest):
     geo=to_solver(seed).to_geojson()
     path.with_suffix(".input.geojson").write_text(json.dumps(geo,indent=2)+"\n")
     stages={}
@@ -219,6 +225,12 @@ def native_geometry(seed,source,path,timeout):
         stages[name]={"featureCount":len(geo.get("features",[])),
                       "hash":sha256(json.dumps(geo,sort_keys=True).encode()).hexdigest()}
     solved=from_solver(LineGraph.from_geojson(geo))
+    # Source-edge direction is frozen in the P0a manifest. Native geometry
+    # can preserve undirected station adjacency without preserving provenance.
+    # Never claim this structural review certifies directed edge identities.
+    semantic_review=validate_projection_graph(
+        solved,manifest,require_source_edge_ids=False)
+
     source_pairs=adjacency(seed)
     target_pairs=adjacency(solved)
     lost={l:sorted(source_pairs[l]-target_pairs.get(l,set())) for l in source_pairs}
@@ -229,11 +241,18 @@ def native_geometry(seed,source,path,timeout):
     stations=(expected==actual and len(expected)==len(solved.stations))
     canonical_stage=stage_review(solved,source)
     angles=poly_review(solved)
-    identities=set(solved.labels)=={line.label for line in LINES.values()}
-    accepted=equal and stations and identities and canonical_stage["preserved"] and angles["octilinear"]
+    identities={line.id for e in solved.edges for line in e.lines}==set(LINES)
+    accepted=(equal and stations and identities and
+              semantic_review["passed"] and canonical_stage["preserved"] and
+              angles["octilinear"])
     proof={"attempted":True,"used":accepted,"steps":stages,
            "adjacencyPreserved":equal,"stationIdentityPreserved":stations,
            "lineIdentityPreserved":identities,"stageReview":canonical_stage,
+           "sourceSemanticSha256":manifest["semanticSha256"],
+           "postSolverSourceReview":semantic_review,
+           "sourceDirectionReconstructed":False,
+           "coordinateBridge":"exact_synthetic_web_mercator_pr6",
+           "topologyStageEnabled":False,
            "octilinearReview":angles,"lostStationLinePairs":lost,
            "addedStationLinePairs":gained,
            "geometryPolicy":"Use solver's exact edge polylines or reject; never re-elbow or guess transfers"}
@@ -763,12 +782,24 @@ def main():
     ap.add_argument("--native-loom",action="store_true")
     ap.add_argument("--timeout",type=int,default=240)
     args=ap.parse_args()
-    source=json.loads(args.source.read_text())
+    raw=args.source.read_bytes()
+    source=json.loads(raw)
+    # P0a: never regenerate a self-validating baseline from modified input.
+    manifest=build_source_manifest(source,ROUTES,source_bytes=raw)
+    lock=json.loads((ROOT/"fixtures/mjourney/equipment-source-certificate-lock-v7.json").read_text())
+    if (manifest["sourceBytesSha256"]!=lock["sourceBytesSha256"] or
+        manifest["semanticSha256"]!=lock["sourceSemanticSha256"] or
+        manifest["canonicalCounts"]!=lock["canonicalCounts"] or
+        manifest["projectionCounts"]!=lock["projectionCounts"]):
+        raise ValueError("P0a source baseline drift: review fixture and V7 projection before native LOOM")
     moments,connections=source_records(source)
     seed=assemble(source)
+    seed_review=validate_projection_graph(seed,manifest,require_source_edge_ids=True)
+    if not seed_review["passed"]:
+        raise ValueError("P0a projection failed: "+"; ".join(seed_review["errors"]))
     args.output.parent.mkdir(parents=True,exist_ok=True)
     if args.native_loom:
-        graph,solver=native_geometry(seed,source,args.output,args.timeout)
+        graph,solver=native_geometry(seed,source,args.output,args.timeout,manifest)
     else:
         graph=seed
         solver={"attempted":False,"used":False,"reviewStatus":"Deterministic seed geometry only; awaiting native LOOM review"}
@@ -791,6 +822,11 @@ def main():
     svg=svg_with_stages(result.svg,graph,source)
     audit={"reviewStatus":"full-lifecycle research systems map; owner topology and visual review required",
       "canonical":{"moments":67,"authoredEdges":87,"edited":False},
+      "sourceCertificate":{"semanticSha256":manifest["semanticSha256"],
+                           "sourceBytesSha256":manifest["sourceBytesSha256"],
+                           "strictPreSolverPassed":seed_review["passed"],
+                           "selectedProjection":manifest["projectionCounts"],
+                           "interpretation":"11 visual route identities are V7 geometry diagnostic, not final product layer lines"},
       "projection":{"displayMoments":len(seed.stations),"displayAuthoredConnections":len(TRACK_IDS),
           "activeStages":stage_review(graph,source)["present"],"lineCount":len(LINES),
           "sourceEdgeIds":TRACK_IDS,"sharedCorridorSourceEdges":SHARED_PREFIX+SHARED_SUFFIX,
