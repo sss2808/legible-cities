@@ -28,9 +28,11 @@ jobs:
       - name: Validate source graph and projection
         run: python -m pytest -q tests/test_mjourney.py
       - name: Generate curated schematic with original renderer
-        run: python bin/mjourney-preview --output out/mjourney-equipment-curated.svg
+        run: python bin/mjourney-preview --network --html --output out/mjourney-equipment-curated.svg
+            out/mjourney-equipment-curated.html
       - name: Generate all-moments stress schematic
-        run: python bin/mjourney-preview --full --output out/mjourney-equipment-full.svg
+        run: python bin/mjourney-preview --network --full --html --output out/mjourney-equipment-full.svg
+            out/mjourney-equipment-full.html
       - name: Publish review artifacts
         uses: actions/upload-artifact@v4
         with:
