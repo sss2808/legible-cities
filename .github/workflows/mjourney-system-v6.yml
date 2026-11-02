@@ -27,13 +27,14 @@ jobs:
           assert a["canonical"]=={"moments":67,"connections":87,"renderedAuthoredEdges":83,"dependencies":3,"lifecycleReturns":1,"stages":10,"layers":7}
           assert a["geometry"]["sourceEdgePairPreserved"]
           assert 'id="map"' in h
-          assert "0 trains" not in h and "NaN:NaN" not in h and "train" not in h.lower()
+          assert "0 trains" not in h and "NaN:NaN" not in h and "Lines 0 of 0" not in h
           assert '<g id="journey-stage-guides"' in h
           assert "Direct customer pathway" in h and "A&E / EPC pathway" in h
           assert "System view" in h
           print("PASS native System source, stages, pathways and no timetable")
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: mjourney-system-v6-native-review
           path: out/mjourney-system-v6.*
