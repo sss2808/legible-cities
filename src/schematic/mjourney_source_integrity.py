@@ -149,6 +149,8 @@ def build_source_manifest(source, routes, *, source_bytes=None):
         "projectionCounts": {"moments": len(stations),
                              "relations": len(projection_edges),
                              "lines": len(chains)},
+        "sourceStationLabels": {mid: by_moment[mid]["label"]
+                                for mid in sorted(stations)},
         "canonical": canonical,
         "projection": semantic["projection"],
         "semanticSha256": fingerprint(semantic),
@@ -176,6 +178,8 @@ def verify_source_manifest(source, manifest, routes, *, source_bytes=None):
         errors.append("selected route/edge/line membership changed")
     if source_bytes is not None and manifest.get("sourceBytesSha256") != regenerated["sourceBytesSha256"]:
         errors.append("source fixture byte digest changed")
+    if manifest.get("sourceStationLabels") != regenerated["sourceStationLabels"]:
+        errors.append("source station labels changed")
     if manifest.get("canonicalCounts") != regenerated["canonicalCounts"]:
         errors.append("canonical counts changed")
     if manifest.get("projectionCounts") != regenerated["projectionCounts"]:
@@ -256,6 +260,8 @@ def validate_projection_graph(graph: LineGraph, manifest, *,
         canonical = expected_stations.get(n.station_id)
         if canonical is None:
             continue
+        if require_source_edge_ids and n.station_label != manifest["sourceStationLabels"].get(n.station_id):
+            errors.append(f"{n.station_id}: source station label changed")
         for field, source_field in (("stageId", "stageId"), ("sourceLayerId", "layerId")):
             if field in n.props and n.props[field] != canonical[source_field]:
                 errors.append(f"{n.station_id}: incorrect {field}")
