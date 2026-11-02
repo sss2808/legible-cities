@@ -61,6 +61,15 @@ jobs:
                   assert page.locator("#stations circle[data-station-id]").count()==59
                   assert page.locator("#stage-headings text").count()==10
                   assert page.locator("#research-layer-guides text").count()==7
+                  if name=="mobile":
+                      visible=page.evaluate("""() => {
+                        const title=document.querySelector('#stage-headings text').getBoundingClientRect();
+                        const controls=document.querySelector('.toolbar').getBoundingClientRect();
+                        const svg=document.querySelector('#metro').getBoundingClientRect();
+                        return title.bottom>controls.bottom+4 &&
+                               title.top<svg.bottom && title.width>0;
+                      }""")
+                      assert visible, "Mobile camera must preserve stage headings"
                   page.screenshot(path=f"out/system-v7-{name}.png",full_page=True)
                   old=page.locator("#metro").get_attribute("viewBox")
                   page.locator("#routeFocus").select_option("ae_epc_mediated")
