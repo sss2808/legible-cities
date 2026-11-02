@@ -296,6 +296,8 @@ def validate_projection_graph(graph: LineGraph, manifest, *,
             dst = graph.nodes.get(e.dst)
             if not src or not dst or src.station_id != record["fromId"] or dst.station_id != record["toId"]:
                 errors.append(f"{source_id}: directed source endpoints changed")
+            if e.props.get("sourceKind") != record["kind"]:
+                errors.append(f"{source_id}: source relationship kind changed")
             members = [line.id for line in e.lines]
             if sorted(members) != record["routeIds"]:
                 errors.append(f"{source_id}: per-edge route membership changed")
