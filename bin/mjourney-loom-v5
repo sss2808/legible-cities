@@ -18,6 +18,19 @@ def octi(a,b):
     elbow=(a[0]+math.copysign(diag,dx),a[1]+math.copysign(diag,dy))
     return [a,elbow,b] if elbow!=b else [a,b]
 
+def simplify(points,eps=20.0):
+    """Ramer-Douglas-Peucker cleanup of stage-reflow stair-step artifacts."""
+    if len(points)<3:return points
+    a,b=points[0],points[-1]
+    vx,vy=b[0]-a[0],b[1]-a[1];n=vx*vx+vy*vy
+    def distance(p):
+        if n<1e-10:return math.dist(p,a)
+        t=max(0,min(1,((p[0]-a[0])*vx+(p[1]-a[1])*vy)/n))
+        return math.hypot(p[0]-(a[0]+t*vx),p[1]-(a[1]+t*vy))
+    deviations=[distance(pt) for pt in points[1:-1]]
+    i=max(range(len(deviations)),key=deviations.__getitem__)
+    return (simplify(points[:i+2],eps)[:-1]+simplify(points[i+1:],eps)) if deviations[i]>eps else [a,b]
+
 def constrain(graph,source):
     byid={m["id"]:m for m in source["moments"]}
     stages=sorted(source["stages"],key=lambda s:s["order"])
@@ -70,6 +83,12 @@ def constrain(graph,source):
         for a,b in zip(points,points[1:]):
             for p in octi(a,b)[1:]:
                 if math.dist(p,route[-1])>1e-7:route.append(p)
+        # Simplify LOOM/stage-reflow micro-turns, then restore exact 0/45/90.
+        reduced=simplify(route,20.0)
+        route=[reduced[0]]
+        for u,v in zip(reduced,reduced[1:]):
+            for pt in octi(u,v)[1:]:
+                if math.dist(pt,route[-1])>1e-7:route.append(pt)
         edges.append(Edge(src=start,dst=end,geometry=route,lines=list(edge.lines),
                           props=dict(edge.props)))
     result=LineGraph(nodes,edges)
@@ -142,7 +161,7 @@ def main():
            "stageWindows":windows,"mode":args.mode,"sourceRelationshipIds":[e["id"] for e in source["connections"]],
            "limits":["Geometric junctions are not customer transfers.",
                      "Layer continuity is not verified directed movement.",
-                     "Stage-constrained repair changes LOOM bends; visual approval pending."]}
+                     "Stage-constrained repair and polyline simplification change LOOM bends; visual approval pending."]}
     path.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2))
     print("RENDERED",path,"stations",len(graph.stations),"labels dropped",len(result.dropped_labels),flush=True)
 if __name__=="__main__":main()
