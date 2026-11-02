@@ -390,7 +390,7 @@ figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border
 .toolbar button[aria-pressed="true"]{background:#efe4d4;color:#272019;border-color:#efe4d4}
 .group-label{color:#f5e9d9;font:600 11px 'Source Sans 3',Arial,sans-serif;background:#211b17df;padding:5px}
 .legend{position:absolute;left:16px;bottom:16px;z-index:2;max-width:min(650px,calc(100% - 32px));padding:9px 12px;background:#211b17e8;color:#dfd1c0;font-size:11px;line-height:1.55;pointer-events:none}
-.legend span{display:inline-block;width:19px;height:5px;vertical-align:middle;border-radius:2px;margin-right:5px}
+.legend span:not(.subtle){display:inline-block;width:19px;height:5px;vertical-align:middle;border-radius:2px;margin-right:5px}
 .legend strong{font-weight:600;color:#f6ecdf;white-space:nowrap}
 .legend .subtle{color:#beb0a1}
 aside{position:absolute;z-index:4;right:15px;top:56px;bottom:18px;width:min(330px,calc(100% - 30px));background:#27211eec;color:#f6ebdd;border:1px solid #756759;padding:20px;overflow:auto;box-shadow:0 16px 40px #0007}
@@ -413,7 +413,9 @@ aside button{background:transparent;color:#f6ebdd;border:1px solid #8d7d71;borde
  .camera{position:absolute;top:37px;right:0;max-width:none;flex-wrap:nowrap;gap:5px}
  .toolbar button,.toolbar select{height:29px;padding:4px 6px}
  #metro{margin-top:85px;height:calc(100% - 85px)}
- .legend{left:8px;bottom:8px;font-size:10px;padding:7px 9px}
+ .legend{left:8px;bottom:16px;font-size:10px;padding:7px 9px}
+ .legend .subtle{display:none}
+ #metro #research-layer-guides text{display:none}
  aside{top:80px;bottom:8px;right:8px}
 }
 @media(prefers-reduced-motion:reduce){
@@ -489,7 +491,7 @@ function fitStations(ids){
 function updateLabels(){
  const pixelFont=23*svg.clientWidth/Math.max(1,vb.width);
  const anchors=new Set(["eq01","eq10","eq16","eq31","eq37","eq39","eq59","eq64","eq67"]);
- const blocked=[...svg.querySelectorAll("#stage-headings text")].map(t=>t.getBoundingClientRect());
+ const blocked=[...svg.querySelectorAll("#stage-headings text,#research-layer-guides text")].filter(t=>getComputedStyle(t).display!=="none").map(t=>t.getBoundingClientRect());
  const placed=[];
  const overlaps=(a,b)=>a.left<b.right+3&&a.right+3>b.left&&
                          a.top<b.bottom+3&&a.bottom+3>b.top;
