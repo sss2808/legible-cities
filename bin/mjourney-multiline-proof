@@ -39,8 +39,8 @@ DIRECT=["edge45","edge51","edge52"]
 SHARED_SUFFIX=["edge53","edge54","edge55","edge56","edge60","edge61","edge62"]
 TECH=["edge35","edge40"]
 FINANCE=["edge37","edge39","edge42"]
-SITE=["edge57","edge63"]
-LOGISTICS=["edge59","edge64"]
+SITE=["edge57"]
+LOGISTICS=["edge59"]
 TRACK_IDS=SHARED_PREFIX+AE+DIRECT+SHARED_SUFFIX+TECH+FINANCE+SITE+LOGISTICS
 # Only layout seed. A station's canonical stage remains supplied by the fixture;
 # this is neither elapsed time nor a claim about physical geography.
@@ -77,7 +77,7 @@ def source_records(source):
     assert len(source["moments"])==67 and len(source["connections"])==87
     moments={x["id"]:x for x in source["moments"]}
     edges={e["id"]:e for e in source["connections"]}
-    assert len(TRACK_IDS)==27 and len(set(TRACK_IDS))==27
+    assert len(TRACK_IDS)==25 and len(set(TRACK_IDS))==25
     for eid in TRACK_IDS:
         assert eid in edges and edges[eid]["kind"] in {"sequence","branch","convergence","handoff"}
     for chain in (SHARED_PREFIX+AE+SHARED_SUFFIX, SHARED_PREFIX+DIRECT+SHARED_SUFFIX):
@@ -329,7 +329,7 @@ aside p{color:#c7b9ad;font-size:13px;line-height:1.5}
 </style></head><body>
 <header><div><div class="eyebrow">M-Journey · Cartographic proof</div>
 <h1>Shared pathways and authorized activity branches</h1>
-<div class="subtitle">23 research moments · 27 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div></header>
+<div class="subtitle">23 research moments · 25 source connections · 2 candidate pathways · 4 activity branches · 5 of 10 stages</div></div></header>
 <nav aria-label="Map focus">
 <button id="both" aria-pressed="true">Both lines</button>
 <button id="ae" aria-pressed="false">A&E / EPC</button>
