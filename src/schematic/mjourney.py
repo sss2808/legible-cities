@@ -229,3 +229,179 @@ def build_projection(data: dict, station_ids: list[str] | None = None) -> Journe
 
 def from_json(path: str | Path, station_ids: list[str] | None = None) -> JourneyProjection:
     return build_projection(json.loads(Path(path).read_text(encoding="utf-8")), station_ids)
+
+
+# Source-backed route view. Kept separate from the original editorial-layer
+# projection above so existing semantics/tests remain stable.
+_NETWORK_SUPPORT_IDS = {
+    # Feasibility branches, all direct source sequences.
+    "edge03", "edge05", "edge07", "edge09", "edge11", "edge13",
+    "edge14", "edge15", "edge17", "edge18", "edge19",
+    # Parallel business-case and governance pathways.
+    "edge23", "edge25", "edge28", "edge29", "edge31",
+    "edge35", "edge40",
+    # Delivery preparation, validation and handover.
+    "edge57", "edge58", "edge63", "edge65", "edge79", "edge81",
+}
+_NETWORK_COLORS = (
+    "#3685F4", "#FF4C95", "#16C9D9", "#F3B92C",
+    "#9862E6", "#FF9151", "#24BE82",
+)
+
+
+def _octilinear(source: tuple[float, float], target: tuple[float, float]
+               ) -> list[tuple[float, float]]:
+    """Make 0/45/90-degree geometry without inventing intermediate stations.
+
+    These are purely visual bend vertices on one confirmed source edge, NOT
+    new research moments. Ends retain their exact source-linked station IDs.
+    """
+    x0, y0 = source
+    x1, y1 = target
+    dx, dy = x1 - x0, y1 - y0
+    if abs(dx) < 1e-6 or abs(dy) < 1e-6 or abs(abs(dx) - abs(dy)) < 1e-6:
+        return [source, target]
+    sx = 1 if dx > 0 else -1
+    sy = 1 if dy > 0 else -1
+    diagonal = min(abs(dy), abs(dx) * 0.60)
+    if abs(dx) > abs(dy) * 1.4:
+        # Lead with the diagonal then follow the horizontal corridor.
+        elbow = (x0 + sx * diagonal, y0 + sy * diagonal)
+        return [source, elbow, target]
+    # Brief horizontal departure, a diagonal turn and a final vertical
+    # arrival. Every segment is horizontal, vertical or 45 degrees.
+    horizontal = max(0.0, abs(dx) - diagonal)
+    a = (x0 + sx * horizontal, y0)
+    b = (a[0] + sx * diagonal, y0 + sy * diagonal)
+    out = [source]
+    for point in (a, b, target):
+        if point != out[-1]:
+            out.append(point)
+    return out
+
+
+def build_network_projection(data: dict, *, full: bool = False) -> JourneyProjection:
+    """Build a *connected* map from actual authored customer-journey edges.
+
+    Color on each directed segment refers to the layer from which the
+    relationship originates. A change of color at a station is a witnessed
+    transition between authored layers, not an inferred passenger interchange.
+    Only sequence/branch/convergence/handoff edges are drawn; dependency
+    overlays and lifecycle feedback have different semantics and remain in
+    the audit, not represented as customer travel.
+
+    This bypasses LOOM because the source graph is not GTFS. It reuses the
+    original Legible Cities LineGraph and SVG renderer unchanged.
+    """
+    moments, connections, stages, layers = _validate(data)
+    ordered_stages = sorted(stages.values(), key=lambda s: s["order"])
+    ordered_layers = sorted(layers.values(), key=lambda l: l["order"])
+    sindex = {s["id"]: i for i, s in enumerate(ordered_stages)}
+    lindex = {l["id"]: i for i, l in enumerate(ordered_layers)}
+    if len(sindex) != len({s["order"] for s in ordered_stages}):
+        raise ProjectionError("ambiguous stage order")
+    if len(lindex) != len({l["order"] for l in ordered_layers}):
+        raise ProjectionError("ambiguous layer order")
+    # Every station gets a monotonically increasing position inside its
+    # authored stage, with inter-stage gutters for chapter and label framing.
+    grouped: dict[str, list[str]] = {s["id"]: [] for s in ordered_stages}
+    for mid, moment in moments.items():
+        grouped[moment["stageId"]].append(mid)
+    coordinates = {}
+    stage_ranges = []
+    left = 85.0
+    for stage in ordered_stages:
+        ids = grouped[stage["id"]]
+        beginning = left
+        for slot, mid in enumerate(ids):
+            coordinates[mid] = (left + slot * 43.0, 105 + lindex[moments[mid]["layerId"]] * 225.0)
+        left += max(len(ids) - 1, 1) * 43.0 + 148.0
+        stage_ranges.append({
+            "id": stage["id"], "name": stage["shortName"],
+            "startX": beginning, "endX": left - 80.0,
+        })
+
+    allowed = [
+        edge for edge in connections.values()
+        if edge["kind"] in _TRAVERSABLE_KINDS
+        and (full or edge.get("primary") or edge["id"] in _NETWORK_SUPPORT_IDS)
+    ]
+    excluded = [
+        {"id": edge["id"], "kind": edge["kind"],
+         "reason": ("dependency/feedback is not an ordinary traversable segment"
+                    if edge["kind"] not in _TRAVERSABLE_KINDS
+                    else "not selected for focused schematic")}
+        for edge in connections.values() if edge not in allowed
+    ]
+    visible = {v for edge in allowed for v in (edge["fromId"], edge["toId"])}
+    nodes = {
+        mid: Node(
+            id=mid, coord=coordinates[mid], station_id=mid,
+            station_label=moments[mid]["label"], props={
+                "sourceMomentId": mid, "stageId": moments[mid]["stageId"],
+                "layerId": moments[mid]["layerId"],
+                "evidenceRefPresent": moments[mid]["evidenceRefPresent"],
+            })
+        for mid in moments if mid in visible
+    }
+    routes = [
+        Line(id=layer["id"], label=layer["name"], color=_NETWORK_COLORS[i])
+        for i, layer in enumerate(ordered_layers)
+    ]
+    line_by_layer = {ordered_layers[i]["id"]: routes[i] for i in range(len(routes))}
+    drawn = []
+    transitions = []
+    for source in allowed:
+        start, end = source["fromId"], source["toId"]
+        source_layer = moments[start]["layerId"]
+        destination_layer = moments[end]["layerId"]
+        crossing = source_layer != destination_layer
+        drawn.append(Edge(
+            src=start, dst=end,
+            geometry=_octilinear(coordinates[start], coordinates[end]),
+            lines=[line_by_layer[source_layer]],
+            props={
+                "sourceEdgeIds": [source["id"]],
+                "sourceKind": source["kind"],
+                "sourceRouteId": source["routeId"],
+                "crossLayer": crossing,
+                "fromLayerId": source_layer,
+                "toLayerId": destination_layer,
+                "projectionRole": "authored-directed-journey-connection",
+                "traversable": True,
+            }
+        ))
+        if crossing:
+            transitions.append({
+                "sourceEdgeId": source["id"], "fromId": start, "toId": end,
+                "fromLayerId": source_layer, "toLayerId": destination_layer,
+                "kind": source["kind"], "routeId": source["routeId"],
+            })
+
+    graph = LineGraph(nodes=nodes, edges=drawn)
+    return JourneyProjection(
+        graph=graph, stages=ordered_stages, layers=ordered_layers,
+        audit={
+            "journeyId": data["journeyId"],
+            "reviewStatus": "actual-source-topology-editorial-geometry-review-needed",
+            "canonical": {
+                "momentCount": len(moments), "connectionCount": len(connections),
+                "stageCount": len(stages), "layerCount": len(layers),
+            },
+            "projection": {
+                "mode": "source-connected-full" if full else "source-connected-focused",
+                "stationIds": list(nodes),
+                "renderedEdgeIds": [e["id"] for e in allowed],
+                "drawnConnectionCount": len(allowed),
+                "crossLayerConnectionCount": len(transitions),
+                "sourceValidatedCrossLayerTransitions": transitions,
+                "interchanges": [],
+                "inferredConnections": 0,
+                "stageRanges": stage_ranges,
+                "lineColorSemantics": "authored origin layer of each directed connection",
+                "allRenderedSegmentsHaveDirectSourceEdges": True,
+                "excludedConnections": excluded,
+            },
+            "editorialPathReview": audit_editorial_paths(data),
+        },
+    )
