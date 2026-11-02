@@ -1,0 +1,616 @@
+#!/usr/bin/env python3
+"""Ten-stage, source-backed research system map with native Legible Cities renderer.
+This is NOT an edit to the canonical 67/87 research graph or a licensed
+customer journey traversal. Research IDs and line/edge provenance are audited.
+The network displays selected continuous authored routes without invented transfers.
+"""
+from __future__ import annotations
+
+import argparse
+from collections import Counter, defaultdict, deque
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
+import html
+import json
+import math
+import sys
+import xml.etree.ElementTree as ET
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"src"))
+from schematic import loom
+from schematic.linegraph import Edge, Line, LineGraph, Node
+from schematic.render import Style, render
+
+# Visual transit-line identities describe explicit continuous edge chains. These
+# are not automatically customer personas, organizational workstreams or transfers.
+LINES={
+  "ae_epc_mediated":Line("ae_epc_mediated","A&E / EPC mediated","#f1729f"),
+  "direct_customer_led":Line("direct_customer_led","Direct customer-led","#3bc9de"),
+  "technical_feasibility":Line("technical_feasibility","Technical feasibility","#d9ba67"),
+  "concept_documentation":Line("concept_documentation","Concept documentation","#aaa1db"),
+  "business_case_costing":Line("business_case_costing","Business case costing","#e7a778"),
+  "technical_approval":Line("technical_approval","Technical approval","#92b7c6"),
+  "financial_review":Line("financial_review","Financial review","#bda2ff"),
+  "site_readiness":Line("site_readiness","Site readiness","#69c6a0"),
+  "logistics_readiness":Line("logistics_readiness","Logistics readiness","#f1bd81"),
+  "validation_strategy":Line("validation_strategy","Validation strategy","#a0c778"),
+  "handover_documentation":Line("handover_documentation","Handover documentation","#c6b8a1")
+}
+SHARED_PREFIX=["edge01","edge02","edge04","edge06","edge09","edge13","edge16",
+ "edge21","edge22","edge27","edge33","edge34","edge38","edge43"]
+AE=["edge44","edge48","edge49","edge50"]
+DIRECT=["edge45","edge51","edge52"]
+SHARED_SUFFIX=["edge53","edge54","edge55","edge56","edge60","edge61","edge62",
+ "edge66","edge67","edge68","edge69","edge70","edge71","edge72","edge73",
+ "edge74","edge75","edge76","edge77","edge78","edge80","edge82","edge83",
+ "edge84","edge85","edge86"]
+ROUTES={
+  "ae_epc_mediated":SHARED_PREFIX+AE+SHARED_SUFFIX,
+  "direct_customer_led":SHARED_PREFIX+DIRECT+SHARED_SUFFIX,
+  "technical_feasibility":["edge07","edge11","edge17"],
+  "concept_documentation":["edge15","edge18"],
+  "business_case_costing":["edge25","edge28","edge31"],
+  "technical_approval":["edge35","edge40"],
+  "financial_review":["edge37","edge39","edge42"],
+  "site_readiness":["edge57","edge63"],
+  "logistics_readiness":["edge59","edge64"],
+  "validation_strategy":["edge58","edge65"],
+  "handover_documentation":["edge79","edge81"]
+}
+TRACK_IDS=list(dict.fromkeys(eid for chain in ROUTES.values() for eid in chain))
+SEEDS={}
+# Layout semantics: x is the authored ten-stage ordinal; y is the actual
+# research layer, with Journey sequence (layer-0) centered in the field.
+# This does not infer physical place, duration, stakeholder travel or transfers.
+ROW_Y={"layer-0":620,"layer-1":190,"layer-2":420,"layer-3":835,
+       "layer-4":1060,"layer-5":1300,"layer-6":1490}
+
+def seed_poly(a,b):
+    x0,y0=a;x1,y1=b
+    dx=x1-x0;dy=y1-y0
+    if abs(dy)<.00001:return [a,b]
+    d=min(abs(dx),abs(dy))
+    signx=1 if dx>=0 else -1
+    signy=1 if dy>=0 else -1
+    before=(dx-signx*d)/2
+    points=[a,(x0+before,y0),(x0+before+signx*d,y0+signy*d),b]
+    clean=[]
+    for p in points:
+        if not clean or math.dist(p,clean[-1])>.000001:clean.append(p)
+    return clean
+
+def source_records(source):
+    assert len(source["moments"])==67 and len(source["connections"])==87
+    moments={x["id"]:x for x in source["moments"]}
+    edges={e["id"]:e for e in source["connections"]}
+    assert len(TRACK_IDS)==68 and len(ROUTES)==len(LINES)
+    for lid,chain in ROUTES.items():
+        assert chain and len(chain)==len(set(chain)),f"repeated source edge in {lid}"
+        for eid in chain:
+            assert eid in edges and edges[eid]["kind"] in {
+                "sequence","branch","convergence","handoff"},f"unauthorized {eid}"
+        for a,b in zip(chain,chain[1:]):
+            assert edges[a]["toId"]==edges[b]["fromId"],f"broken authored route {lid}: {a} => {b}"
+    required={node for eid in TRACK_IDS for node in
+              (edges[eid]["fromId"],edges[eid]["toId"])}
+    assert len(required)==59
+    assert {m["stageId"] for mid,m in moments.items() if mid in required}=={
+        s["id"] for s in source["stages"]}
+    assert all(e["kind"]!="lifecycle_return" for e in
+               (edges[eid] for eid in TRACK_IDS))
+    SEEDS.clear()
+    for stage in sorted(source["stages"],key=lambda s:s["order"]):
+        present=sorted((m for m in source["moments"]
+                        if m["id"] in required and m["stageId"]==stage["id"]),
+                       key=lambda m:int(m["id"][2:]))
+        for i,m in enumerate(present):
+            fraction=(i+.5)/len(present)
+            SEEDS[m["id"]]=(120+stage["order"]*330+fraction*250,
+                            ROW_Y[m["layerId"]]+(int(m["id"][2:])%3-1)*16)
+    assert len(SEEDS)==len(required)
+    return moments,edges
+
+def assemble(source):
+    moments,edges=source_records(source)
+    nodes={mid:Node(id=mid,coord=xy,station_id=mid,
+                    station_label=moments[mid]["label"],
+                    props={"stageId":moments[mid]["stageId"],
+                           "sourceMomentId":mid,"sourceLayerId":moments[mid]["layerId"]})
+           for mid,xy in SEEDS.items()}
+    drawn=[]
+    for eid in TRACK_IDS:
+        e=edges[eid]
+        carrying=[LINES[lid] for lid,chain in ROUTES.items() if eid in chain]
+        assert carrying
+        a,b=e["fromId"],e["toId"]
+        drawn.append(Edge(src=a,dst=b,geometry=seed_poly(SEEDS[a],SEEDS[b]),
+                   lines=carrying,props={"sourceEdgeIds":[eid],"sourceKind":e["kind"],
+                     "projectionRole":("candidate-pathway-track" if any(
+                       lid in ("ae_epc_mediated","direct_customer_led") for lid,chain
+                       in ROUTES.items() if eid in chain) else "authored-activity-track"),
+                     "traversable":False}))
+    return LineGraph(nodes,drawn)
+
+# Native LOOM works in geographic input but optimizes 45-degree angles in a
+# locally projected metric plane. Longitude degrees at latitude 48° are shorter
+# than latitude degrees by cos(48°). Never treat lon/lat degrees as isotropic
+# screen coordinates, or valid LOOM diagonals look 1.49:1 after reprojecting.
+_LOCAL_LONGITUDE_SCALE=math.cos(math.radians(48.0))
+
+def to_solver(graph):
+    """Stage-constrained seed into a local metric-equivalent lon/lat domain."""
+    return graph.reproject(lambda p:(8+p[0]/(2500*_LOCAL_LONGITUDE_SCALE),
+                                      48+p[1]/2500))
+
+def from_solver(graph):
+    """Restore the same local metric axes without rebuilding solver polylines."""
+    return graph.reproject(lambda p:((p[0]-8)*2500*_LOCAL_LONGITUDE_SCALE,
+                                      (p[1]-48)*2500))
+
+def adjacency(graph):
+    # Stops joined via geometry-only junctions count as adjacent iff the
+    # chosen line meets no other station in between. This is an UNDIRECTED
+    # *cartographic track* check; route direction remains in source chains.
+    byline=defaultdict(lambda:defaultdict(set))
+    for e in graph.edges:
+        for line in e.lines:
+            byline[line.id][e.src].add(e.dst)
+            byline[line.id][e.dst].add(e.src)
+    out={}
+    for lid,links in byline.items():
+        connected=set()
+        for station in graph.stations:
+            if station.id not in links:continue
+            todo=[station.id];seen={station.id}
+            while todo:
+                here=todo.pop()
+                for nxt in links[here]:
+                    if nxt in seen:continue
+                    seen.add(nxt)
+                    other=graph.nodes[nxt]
+                    if other.station_id:
+                        connected.add(tuple(sorted((station.station_id,other.station_id))))
+                    else:todo.append(nxt)
+        out[lid]=connected
+    return out
+
+def stage_review(graph,source):
+    byid={m["id"]:m for m in source["moments"]}
+    order={s["id"]:s["order"] for s in source["stages"]}
+    groups=defaultdict(list)
+    for node in graph.stations:groups[byid[node.station_id]["stageId"]].append(node.coord[0])
+    present=sorted(groups,key=lambda x:order[x])
+    bounds={sid:(min(xs),max(xs)) for sid,xs in groups.items()}
+    # Nodes may shift within their stage; no station may migrate to an earlier
+    # stage domain, and source ordinal order must stay left to right.
+    violations=[]
+    for left,right in zip(present,present[1:]):
+        if bounds[left][1]+4>=bounds[right][0]:
+            violations.append(f"interleaved stages {left} and {right}")
+    return {"preserved":not violations,"bounds":bounds,"violations":violations,
+            "present":present,"fullCanonicalStageCount":len(source["stages"])}
+
+def poly_review(graph):
+    bad=[]
+    for index,e in enumerate(graph.edges):
+        for a,b in zip(e.geometry,e.geometry[1:]):
+            dx=abs(a[0]-b[0]);dy=abs(a[1]-b[1])
+            if min(dx,dy)>3 and abs(dx-dy)>3:
+                bad.append({"edgeIndex":index,"dx":round(dx,2),"dy":round(dy,2)})
+    return {"octilinear":not bad,"violations":bad[:20],
+            "polylinePoints":sum(len(e.geometry) for e in graph.edges)}
+
+def native_geometry(seed,source,path,timeout):
+    geo=to_solver(seed).to_geojson()
+    path.with_suffix(".input.geojson").write_text(json.dumps(geo,indent=2)+"\n")
+    stages={}
+    for name in ["loom","octi"]:
+        geo=loom.run(name,geo,timeout=timeout)
+        path.with_suffix("."+name+".geojson").write_text(json.dumps(geo,indent=2)+"\n")
+        stages[name]={"featureCount":len(geo.get("features",[])),
+                      "hash":sha256(json.dumps(geo,sort_keys=True).encode()).hexdigest()}
+    solved=from_solver(LineGraph.from_geojson(geo))
+    source_pairs=adjacency(seed)
+    target_pairs=adjacency(solved)
+    lost={l:sorted(source_pairs[l]-target_pairs.get(l,set())) for l in source_pairs}
+    gained={l:sorted(target_pairs.get(l,set())-source_pairs[l]) for l in source_pairs}
+    equal=all(not x for x in lost.values()) and all(not x for x in gained.values())
+    expected={n.station_id for n in seed.stations}
+    actual={n.station_id for n in solved.stations}
+    stations=(expected==actual and len(expected)==len(solved.stations))
+    canonical_stage=stage_review(solved,source)
+    angles=poly_review(solved)
+    identities=set(solved.labels)=={line.label for line in LINES.values()}
+    accepted=equal and stations and identities and canonical_stage["preserved"] and angles["octilinear"]
+    proof={"attempted":True,"used":accepted,"steps":stages,
+           "adjacencyPreserved":equal,"stationIdentityPreserved":stations,
+           "lineIdentityPreserved":identities,"stageReview":canonical_stage,
+           "octilinearReview":angles,"lostStationLinePairs":lost,
+           "addedStationLinePairs":gained,
+           "geometryPolicy":"Use solver's exact edge polylines or reject; never re-elbow or guess transfers"}
+    return (solved if accepted else seed),proof
+
+def svg_with_stages(original,graph,source):
+    ET.register_namespace("","http://www.w3.org/2000/svg")
+    namespace="{http://www.w3.org/2000/svg}"
+    root=ET.fromstring(original)
+    circles=root.findall(".//"+namespace+"circle")
+    positions={c.attrib["data-station-id"]:(float(c.attrib["cx"]),float(c.attrib["cy"]))
+               for c in circles if c.attrib.get("data-station-id")}
+    assert len(positions)==len(SEEDS)
+    byid={m["id"]:m for m in source["moments"]}
+    layer_byid={l["id"]:l for l in source["layers"]}
+    handoff_targets={e["toId"] for e in source["connections"] if
+                     e["kind"]=="handoff" and e["id"] in TRACK_IDS}
+    for c in circles:
+        sid=c.attrib.get("data-station-id")
+        if not sid:continue
+        layer=layer_byid[byid[sid]["layerId"]]
+        c.set("data-layer",layer["id"])
+        c.set("data-key","true" if byid[sid]["key"] else "false")
+        c.set("data-handoff","true" if sid in handoff_targets else "false")
+        c.set("style",c.get("style","")+";stroke:"+layer["color"]+
+              ";stroke-width:"+( "4.8" if sid in handoff_targets else "3.4"))
+    # LOOM node IDs are *unstable* internal pointers. Resolve rendered label
+    # data-node references back to canonical station IDs before assigning LOD.
+    by_pointer={c.attrib.get("data-node"):c.attrib.get("data-station-id")
+                for c in circles if c.attrib.get("data-station-id")}
+    label_group=root.find(".//"+namespace+"g[@id='labels']")
+    if label_group is not None:
+        for el in label_group.findall(namespace+"text"):
+            canonical=by_pointer.get(el.attrib.get("data-node"))
+            if canonical:
+                el.set("data-station-id",canonical)
+                el.set("data-key","true" if byid[canonical]["key"] else "false")
+                el.set("data-decision","true" if byid[canonical]["decision"] else "false")
+    # Compute transform from actual source to renderer's SVG positions, not
+    # pre-normalized assumptions or extra copies of station coordinates.
+    def fit(axis):
+        vals=[(n.coord[axis],positions[n.station_id][axis]) for n in graph.stations]
+        mx=sum(x for x,_ in vals)/len(vals);my=sum(y for _,y in vals)/len(vals)
+        a=sum((x-mx)*(y-my) for x,y in vals)/sum((x-mx)**2 for x,y in vals)
+        b=my-a*mx
+        err=max(abs(a*x+b-y) for x,y in vals)
+        if err>3:raise ValueError(f"nonaffine renderer transform {axis}: {err:.2f}")
+        return lambda x:a*x+b
+    px=fit(0)
+    byid={m["id"]:m for m in source["moments"]}
+    stages={s["id"]:s for s in source["stages"]}
+    groups=defaultdict(list)
+    for mid,(x,y) in positions.items():groups[byid[mid]["stageId"]].append(x)
+    ordering=sorted(groups,key=lambda sid:stages[sid]["order"])
+    ybase=min(y for _,y in positions.values())-75
+    top=ET.Element(namespace+"g",{"id":"stage-headings","aria-label":"Authored ordinal journey stages"})
+    for sid in ordering:
+        xs=groups[sid];center=(min(xs)+max(xs))/2
+        ET.SubElement(top,namespace+"text",{"x":f"{center:.2f}","y":f"{ybase:.2f}",
+              "text-anchor":"middle","fill":"#cfc1b5","font-size":"26",
+              "font-weight":"700"}).text=stages[sid]["shortName"]
+        ET.SubElement(top,namespace+"line",{"x1":f"{min(xs)-24:.2f}",
+              "x2":f"{min(xs)-24:.2f}","y1":f"{ybase+18:.2f}",
+              "y2":f"{max(y for _,y in positions.values())+42:.2f}",
+              "stroke":"#a69887","stroke-width":"1","stroke-dasharray":"3 14",
+              "opacity":"0.16"})
+    # Authored research layers are station location bands, not transit routes.
+    # In particular, layer-0 means Journey sequence rather than an organization.
+    layer_y=defaultdict(list)
+    for mid,(x,y) in positions.items():
+        layer_y[byid[mid]["layerId"]].append(y)
+    left_x=min(x for x,_ in positions.values())-205
+    guide=ET.Element(namespace+"g",{"id":"research-layer-guides",
+                       "aria-label":"Authored research layer bands"})
+    for layer in source["layers"]:
+        ys=layer_y.get(layer["id"],[])
+        if not ys:continue
+        cy=sorted(ys)[len(ys)//2]
+        ET.SubElement(guide,namespace+"line",{
+            "x1":f"{left_x+4:.1f}","x2":f"{max(x for x,_ in positions.values())+50:.1f}",
+            "y1":f"{cy:.1f}","y2":f"{cy:.1f}",
+            "stroke":layer["color"],"stroke-width":"1.5",
+            "stroke-dasharray":"3 14","opacity":".19"})
+        ET.SubElement(guide,namespace+"text",{
+            "x":f"{left_x:.1f}","y":f"{cy-12:.1f}",
+            "fill":"#d9cbb9","font-size":"17","font-weight":"600"}).text=layer["name"]
+    root.insert(1,guide)
+    root.insert(2,top)
+    # Keep geometry stage guides on same canvas as native renderer.
+    box=[float(x) for x in root.attrib["viewBox"].split()]
+    topy=min(box[1],ybase-52)
+    right=max(box[0]+box[2],max(x for x,_ in positions.values())+180)
+    bottom=max(box[1]+box[3],max(y for _,y in positions.values())+100)
+    viewleft=min(box[0]-20,left_x-18)
+    root.set("viewBox",f"{viewleft:.2f} {topy:.2f} {right-viewleft+40:.2f} {bottom-topy:.2f}")
+    root.set("id","metro")
+    root.set("role","img")
+    root.set("aria-label","Equipment buying system with ten research stages, two candidate selection pathways and authored activity branches")
+    root.attrib.pop("width",None);root.attrib.pop("height",None)
+    return ET.tostring(root,encoding="unicode")
+
+def page(svg,graph,source,audit):
+    full={m["id"]:m for m in source["moments"]}
+    conn={e["id"]:e for e in source["connections"]}
+    layer={l["id"]:l for l in source["layers"]}
+    stage={s["id"]:s for s in source["stages"]}
+    details={mid:{"id":mid,"label":full[mid]["label"],
+                  "stage":stage[full[mid]["stageId"]]["shortName"],
+                  "stageOrdinal":stage[full[mid]["stageId"]]["order"],
+                  "layer":full[mid]["layerId"],
+                  "researchLayer":layer[full[mid]["layerId"]]["name"],
+                  "key":full[mid]["key"],"decision":full[mid]["decision"],
+                  "evidence":full[mid]["evidenceClass"],
+                  "evidenceRefPresent":full[mid]["evidenceRefPresent"],
+                  "links":[{"id":eid,"kind":conn[eid]["kind"],
+                            "from":conn[eid]["fromId"],"to":conn[eid]["toId"]}
+                           for eid in TRACK_IDS if mid in (conn[eid]["fromId"],conn[eid]["toId"])]}
+             for mid in SEEDS}
+    route_stations={lid:sorted({v for eid in chain for v in
+                  (conn[eid]["fromId"],conn[eid]["toId"])}) for lid,chain in ROUTES.items()}
+    payload=json.dumps({"moments":details,
+       "routes":{lid:{"name":l.label,"color":l.color,"stationIds":route_stations[lid]}
+                  for lid,l in LINES.items()},
+       "researchLayers":{l["id"]:{"name":l["name"],"color":l["color"]}
+                         for l in source["layers"]},
+       "audit":audit},separators=(",",":")).replace("<","\\u003c")
+    document=r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>M-Journey equipment buying systems map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&family=Source+Sans+3:wght@500;600;700&display=swap');
+:root{font-family:'Open Sans',Arial,sans-serif;background:#e9dec9;color:#28231f}
+*{box-sizing:border-box}body{margin:0}button,select{font:inherit}
+header{padding:22px clamp(16px,4vw,52px) 16px;max-width:1500px;margin:auto}
+h1{font-family:'Source Sans 3',Arial,sans-serif;font-size:27px;font-weight:700;margin:0 0 6px}
+header p{font-size:13px;color:#574c42;line-height:1.5;margin:0}
+main{padding:0 clamp(8px,2vw,28px) 24px}
+figure{margin:auto;max-width:1600px;position:relative;height:calc(100vh - 145px);min-height:610px;max-height:920px;overflow:hidden;background:#211b17;border:1px solid #b8a994}
+figure:fullscreen{width:100vw;height:100vh;max-width:none;max-height:none;border:0}
+#metro{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#metro.grabbed{cursor:grabbing}
+#metro #lines path{stroke-linejoin:round;stroke-linecap:round}
+#metro #lines g.line{transition:opacity .16s}
+#metro #lines g.line.subdued{opacity:.1}
+#metro #stations circle{cursor:pointer;transition:opacity .16s}
+#metro #stations circle.subdued{opacity:.22}
+#metro #stations circle.selected-station{r:11;stroke:#fff4da!important;stroke-width:5!important}
+#metro #labels text{opacity:0;paint-order:stroke;stroke:#211b17;stroke-width:3.5}
+#metro #stage-headings text{paint-order:stroke;stroke:#211b17;stroke-width:2}
+.toolbar{position:absolute;top:12px;left:12px;right:12px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;z-index:3;pointer-events:none}
+.filters,.camera{display:flex;gap:6px;align-items:center;flex-wrap:wrap;pointer-events:auto}
+.camera{margin-left:auto;justify-content:flex-end}
+.toolbar select,.toolbar button{background:#211b17f2;border:1px solid #8d7d71;border-radius:3px;color:#f9f1e7;font:600 11px/1.2 'Source Sans 3',Arial,sans-serif;height:32px;padding:6px 9px}
+.toolbar select{max-width:190px}
+.toolbar button{cursor:pointer;min-width:32px}
+.toolbar button:hover,.toolbar select:hover{border-color:#f6d3a8}
+.toolbar button:focus-visible,.toolbar select:focus-visible,aside button:focus-visible{outline:2px solid #f3c06a;outline-offset:2px}
+.toolbar button[aria-pressed="true"]{background:#efe4d4;color:#272019;border-color:#efe4d4}
+.group-label{color:#f5e9d9;font:600 11px 'Source Sans 3',Arial,sans-serif;background:#211b17df;padding:5px}
+.legend{position:absolute;left:16px;bottom:16px;z-index:2;max-width:min(490px,calc(100% - 32px));padding:9px 12px;background:#211b17e8;color:#dfd1c0;font-size:11px;line-height:1.55;pointer-events:none}
+.legend span{display:inline-block;width:19px;height:5px;vertical-align:middle;border-radius:2px;margin-right:5px}
+.legend strong{font-weight:600;color:#f6ecdf}
+.legend .subtle{color:#beb0a1}
+aside{position:absolute;z-index:4;right:15px;top:56px;bottom:18px;width:min(330px,calc(100% - 30px));background:#27211eec;color:#f6ebdd;border:1px solid #756759;padding:20px;overflow:auto;box-shadow:0 16px 40px #0007}
+aside[hidden]{display:none}
+aside h2{font-family:'Source Sans 3',Arial,sans-serif;font-size:21px;line-height:1.18;margin:12px 0 14px}
+aside p{color:#d0c1b0;font-size:12px;line-height:1.6}
+aside .field{border-top:1px solid #50443a;margin-top:12px;padding-top:11px}
+aside .field small{display:block;color:#bdae9c;font-size:10px;margin-bottom:4px}
+aside .field b{font-size:12px;font-weight:600}
+aside button{background:transparent;color:#f6ebdd;border:1px solid #8d7d71;border-radius:3px;float:right;padding:3px 8px;cursor:pointer}
+@media(max-width:760px){
+ header{padding:17px 15px 13px}h1{font-size:22px}
+ main{padding:0}figure{height:calc(100dvh - 107px);min-height:430px;border-left:0;border-right:0}
+ .toolbar{top:8px;left:8px;right:8px;gap:7px}
+ .toolbar select{max-width:125px}
+ .group-label{display:none}
+ .filters{max-width:calc(100% - 110px)}
+ .camera{max-width:110px}
+ .toolbar button,.toolbar select{height:29px;padding:4px 6px}
+ .legend{left:8px;bottom:8px;font-size:10px;padding:7px 9px}
+ aside{top:80px;bottom:8px;right:8px}
+}
+@media(prefers-reduced-motion:reduce){
+ #metro #lines g.line,#metro #stations circle{transition:none}
+}
+</style></head><body>
+<header><h1>Equipment buying systems map</h1>
+<p>Trace research moments, decisions and handoffs across ten stages of the buying lifecycle.</p></header>
+<main><figure id="frame" aria-label="Interactive equipment buying systems map">
+<div class="toolbar">
+<div class="filters">
+<label class="group-label" for="routeFocus">Route</label>
+<select id="routeFocus" aria-label="Choose source-backed route"><option value="all">All routes</option>
+<option value="ae_epc_mediated">A&E / EPC mediated</option>
+<option value="direct_customer_led">Direct customer-led</option>
+<option value="technical_feasibility">Technical feasibility</option>
+<option value="concept_documentation">Concept documentation</option>
+<option value="business_case_costing">Business case costing</option>
+<option value="technical_approval">Technical approval</option>
+<option value="financial_review">Financial review</option>
+<option value="site_readiness">Site readiness</option>
+<option value="logistics_readiness">Logistics readiness</option>
+<option value="validation_strategy">Validation strategy</option>
+<option value="handover_documentation">Handover documentation</option></select>
+<label class="group-label" for="layerFocus">Layer</label>
+<select id="layerFocus" aria-label="Highlight authored research layer">
+<option value="all">All research layers</option>
+<option value="layer-0">Journey sequence</option>
+<option value="layer-1">Design partners</option>
+<option value="layer-2">Customer relationship</option>
+<option value="layer-3">Procurement</option>
+<option value="layer-4">Technical / validation</option>
+<option value="layer-5">Documentation</option>
+<option value="layer-6">Service / lifecycle</option>
+</select>
+<button id="labelToggle" aria-pressed="false">More labels</button></div>
+<div class="camera">
+<button id="zoomIn" aria-label="Zoom in" title="Zoom in">+</button>
+<button id="zoomOut" aria-label="Zoom out" title="Zoom out">−</button>
+<button id="fit" title="Fit visible map">Fit</button>
+<button id="fullscreen" title="Fullscreen" aria-label="Fullscreen">⛶</button>
+</div></div>
+__SVG__
+<div class="legend"><strong><span style="background:#f1729f"></span>A&E / EPC</strong> &nbsp;
+<strong><span style="background:#3bc9de"></span>Direct customer</strong> &nbsp;
+<span class="subtle">Other colored tracks show authored activity routes. Station rings identify research layers. Highlight a route or layer to inspect it.</span></div>
+<aside id="inspector" aria-live="polite" hidden><button id="closeInspector" aria-label="Close details">×</button>
+<div id="inspectorBody"></div></aside>
+</figure></main>
+<script id="map-data" type="application/json">__DATA__</script>
+<script>(()=>{"use strict";
+const data=JSON.parse(document.querySelector("#map-data").textContent);
+const svg=document.querySelector("#metro"),frame=document.querySelector("#frame");
+const route=document.querySelector("#routeFocus"),layer=document.querySelector("#layerFocus");
+const ins=document.querySelector("#inspector"),insBody=document.querySelector("#inspectorBody");
+const circles=[...svg.querySelectorAll("#stations circle[data-station-id]")];
+const labels=[...svg.querySelectorAll("#labels text[data-station-id]")];
+const groups=[...svg.querySelectorAll("#lines g[data-line]")];
+const vb=svg.viewBox.baseVal,home={x:vb.x,y:vb.y,w:vb.width,h:vb.height};
+let expandedLabels=false,selectedId=null;
+function setView(x,y,w,h){vb.x=x;vb.y=y;vb.width=w;vb.height=h;updateLabels()}
+function fit(){setView(home.x,home.y,home.w,home.h)}
+function fitStations(ids){
+ const cs=circles.filter(c=>ids.has(c.dataset.stationId));
+ if(!cs.length){fit();return}
+ const xs=cs.map(c=>+c.getAttribute("cx")),ys=cs.map(c=>+c.getAttribute("cy"));
+ const minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+ let w=Math.max(270,maxx-minx+210),h=Math.max(235,maxy-miny+195);
+ const aspect=frame.clientWidth/Math.max(1,frame.clientHeight);
+ if(w/h<aspect)w=h*aspect;else h=w/aspect;
+ setView((minx+maxx-w)/2,(miny+maxy-h)/2,w,h);
+}
+function updateLabels(){
+ const scale=home.w/vb.width;
+ for(const t of labels){
+   const m=data.moments[t.dataset.stationId];
+   const prominent=m && (m.decision||m.id==="eq01"||m.id==="eq67"||m.links.some(e=>e.kind==="handoff"));
+   t.style.opacity=(expandedLabels||scale>=2.5||scale>=1.55&&m?.key||prominent)?1:0;
+ }
+}
+function focus(){
+ const key=route.value,layerId=layer.value;
+ const selected=new Set(data.routes[key]?.stationIds||[]);
+ for(const g of groups)g.classList.toggle("subdued",key!=="all"&&g.dataset.line!==data.routes[key]?.name);
+ for(const c of circles)c.classList.toggle("subdued",
+   key!=="all"&&!selected.has(c.dataset.stationId)||
+   layerId!=="all"&&c.dataset.layer!==layerId);
+ if(key==="all"&&layerId==="all")fit();
+ else if(key!=="all")fitStations(selected);
+ else fitStations(new Set(circles.filter(c=>c.dataset.layer===layerId).map(c=>c.dataset.stationId)));
+}
+route.addEventListener("change",focus);layer.addEventListener("change",focus);
+document.querySelector("#labelToggle").onclick=e=>{
+ expandedLabels=!expandedLabels;e.currentTarget.setAttribute("aria-pressed",String(expandedLabels));
+ updateLabels();
+};
+function zoom(factor){
+ const cx=vb.x+vb.width/2,cy=vb.y+vb.height/2;
+ let w=Math.max(260,Math.min(home.w*1.5,vb.width*factor));
+ let h=w*frame.clientHeight/Math.max(1,frame.clientWidth);
+ setView(cx-w/2,cy-h/2,w,h);
+}
+document.querySelector("#zoomIn").onclick=()=>zoom(.77);
+document.querySelector("#zoomOut").onclick=()=>zoom(1.3);
+document.querySelector("#fit").onclick=focus;
+document.querySelector("#fullscreen").onclick=()=>{
+ document.fullscreenElement?document.exitFullscreen?.():frame.requestFullscreen?.();
+};
+document.addEventListener("fullscreenchange",()=>requestAnimationFrame(()=>{
+ if(route.value==="all"&&layer.value==="all")fit();else focus();
+}));
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+for(const c of circles)c.addEventListener("click",()=>{
+ const mid=c.dataset.stationId,m=data.moments[mid];if(!m)return;
+ selectedId=mid;
+ for(const other of circles)other.classList.toggle("selected-station",other===c);
+ ins.hidden=false;
+ insBody.innerHTML='<h2>'+escapeHtml(m.label)+'</h2>'+
+ '<div class="field"><small>Journey stage</small><b>'+escapeHtml(m.stage)+'</b></div>'+
+ '<div class="field"><small>Authored research layer</small><b>'+escapeHtml(m.researchLayer)+'</b></div>'+
+ '<div class="field"><small>Evidence class</small><b>'+escapeHtml(m.evidence)+
+ (m.evidenceRefPresent?' · source reference present':' · no linked source in public fixture')+'</b></div>'+
+ '<div class="field"><small>Authored source relationships</small><p>'+m.links.map(e=>
+ escapeHtml(e.id+' · '+e.kind+' · '+e.from+' → '+e.to)).join('<br>')+'</p></div>';
+});
+document.querySelector("#closeInspector").onclick=()=>{
+ ins.hidden=true;selectedId=null;
+ for(const c of circles)c.classList.remove("selected-station");
+};
+let drag=null;
+svg.addEventListener("pointerdown",e=>{
+ if(e.target.closest("circle"))return;
+ drag=[e.clientX,e.clientY];svg.setPointerCapture(e.pointerId);svg.classList.add("grabbed");
+});
+svg.addEventListener("pointermove",e=>{
+ if(!drag)return;
+ vb.x-=(e.clientX-drag[0])/svg.clientWidth*vb.width;
+ vb.y-=(e.clientY-drag[1])/svg.clientHeight*vb.height;
+ drag=[e.clientX,e.clientY];updateLabels();
+});
+svg.addEventListener("pointerup",()=>{drag=null;svg.classList.remove("grabbed")});
+svg.addEventListener("pointercancel",()=>{drag=null;svg.classList.remove("grabbed")});
+svg.addEventListener("wheel",e=>{e.preventDefault();zoom(e.deltaY>0?1.1:.89)},{passive:false});
+if(window.innerWidth<760){
+ const first=new Set(Object.values(data.moments).filter(m=>m.stageOrdinal<=2).map(m=>m.id));
+ fitStations(first);
+}else fit();
+})();</script></body></html>"""
+    return document.replace("__SVG__",svg).replace("__DATA__",payload)
+
+def main():
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--source",type=Path,default=ROOT/"fixtures/mjourney/equipment-sanitized-v1.json")
+    ap.add_argument("--output",type=Path,default=Path("out/cartographic-line-proof"))
+    ap.add_argument("--native-loom",action="store_true")
+    ap.add_argument("--timeout",type=int,default=240)
+    args=ap.parse_args()
+    source=json.loads(args.source.read_text())
+    moments,connections=source_records(source)
+    seed=assemble(source)
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    if args.native_loom:
+        graph,solver=native_geometry(seed,source,args.output,args.timeout)
+    else:
+        graph=seed
+        solver={"attempted":False,"used":False,"reviewStatus":"Deterministic seed geometry only; awaiting native LOOM review"}
+    if solver.get("attempted"):
+        solver["reviewStatus"]=("Native LOOM polylines preserved" if solver["used"] else
+                 "Native LOOM candidate REJECTED; displayed seed only")
+    assert adjacency(graph)==adjacency(seed)
+    assert {n.station_id for n in graph.stations}==set(SEEDS)
+    assert set(graph.labels)=={l.label for l in LINES.values()}
+    if solver.get("used"):assert poly_review(graph)["octilinear"]
+    # Use original Legible Cities renderer on accepted LOOM geometry, not a
+    # custom hand-built SVG track/path engine.
+    result=render(graph,width=2350,style=Style(
+        background="#211b17",station_fill="#fff4df",station_stroke_color="#211b17",
+        label_color="#fff4df",line_width=8.5,line_gap=1.95,station_radius=6.2,
+        interchange_radius=8.5,station_stroke=3,label_size=17,
+        label_offset=12,padding=64,themed=True
+       ),line_order=[l.label for l in LINES.values()],
+       colors={l.label:l.color for l in LINES.values()})
+    svg=svg_with_stages(result.svg,graph,source)
+    audit={"reviewStatus":"full-lifecycle research systems map; owner topology and visual review required",
+      "canonical":{"moments":67,"authoredEdges":87,"edited":False},
+      "projection":{"displayMoments":len(seed.stations),"displayAuthoredConnections":len(TRACK_IDS),
+          "activeStages":stage_review(graph,source)["present"],"lineCount":len(LINES),
+          "sourceEdgeIds":TRACK_IDS,"sharedCorridorSourceEdges":SHARED_PREFIX+SHARED_SUFFIX,
+          "aePathSourceEdges":SHARED_PREFIX+AE+SHARED_SUFFIX,
+          "directPathSourceEdges":SHARED_PREFIX+DIRECT+SHARED_SUFFIX,
+          "singleCanonicalStationPerMoment":True,"approvedInterchanges":[],
+          "unapprovedSyntheticEdges":0,"authoredResearchLayers":len(source["layers"]),\n          "journeySequenceIsNotOrganizationalWorkstream":True,\n          "routeFamilies":ROUTES,\n          "includedHandoffEdgeIds":[eid for eid in TRACK_IDS if connections[eid]["kind"]=="handoff"],
+          "classification":"Candidate selection routes and shorter authored activity chains, not validated customer travel"},
+      "solver":solver,"integrity":{"stationAdjacencyPreserved":adjacency(graph)==adjacency(seed),
+          "stagePreserved":stage_review(graph,source)["preserved"],
+          "lineIdentitiesPreserved":True,"nativePolylinesUsedVerbatim":bool(solver.get("used")),
+          "noTransitTimes":True},
+      "renderer":{"source":"schematic.render.render", "labelsDropped":result.dropped_labels}}
+    args.output.with_suffix(".svg").write_text(svg)
+    args.output.with_suffix(".html").write_text(page(svg,graph,source,audit))
+    args.output.with_suffix(".audit.json").write_text(json.dumps(audit,indent=2)+"\n")
+    print(json.dumps({"output":str(args.output),"solver":solver,
+       "stations":len(graph.stations),"trackEdges":len(graph.edges),
+       "renderTracks":len(result.tracks),"labelsDropped":result.dropped_labels},indent=2))
+if __name__=="__main__":main()
