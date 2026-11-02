@@ -556,7 +556,8 @@ function selection(){
 function visibleContentBox(full=false){
  const state=selection(),all=full||(state.key==="all"&&state.layerId==="all");
  const members=all?allStations:state.ids;
- const visibleTracks=groups.filter(g=>full||state.key==="all"||g.dataset.line===data.routes[state.key].name);
+ const visibleTracks=groups.filter(g=>full||(state.key==="all"&&state.layerId==="all")||
+  (state.key!=="all"&&g.dataset.line===data.routes[state.key].name));
  const items=[...visibleTracks,...circles.filter(c=>members.has(c.dataset.stationId))];
  if(all){
   items.push(...svg.querySelectorAll("#stage-headings text,#research-layer-guides text"));
