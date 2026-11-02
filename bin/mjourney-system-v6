@@ -216,6 +216,7 @@ def supplementary(svg,source,graph,bounds):
     new_top=min(upper-5,box[1]);bottom=max(n.coord[1] for n in graph.stations)+185
     new_bottom=max(box[1]+box[3],bottom)
     root.set("viewBox",f"{box[0]-40:.2f} {new_top:.2f} {box[2]+80:.2f} {new_bottom-new_top:.2f}")
+    root.set("id","map")
     root.set("role","img")
     root.set("aria-label","Equipment buying source-connected systems schematic")
     root.set("preserveAspectRatio","xMidYMid meet")
