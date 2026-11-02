@@ -99,6 +99,27 @@ jobs:
           print("CONFIGURATION PROBES COMPLETED (NO GEOMETRY AUTO-PROMOTION)")
           print("Candidate names:",r["acceptedCandidatesForOwnerReview"])
           PY
+      - name: Prove native LOOM line-order-only fallback without running octi
+        env:
+          SCHEMATIC_LOOM_BIN: /tmp/loom-build
+        run: |
+          python bin/mjourney-system-network --native-line-order-only --timeout 240 \
+            --output out/stage-diff-line-order
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          a=json.loads(Path("out/stage-diff-line-order.audit.json").read_text())
+          s=a["solver"]
+          assert s["attempted"] and s["lineOrderUsed"]
+          assert not s["used"] and not s["octiAttempted"]
+          assert s["adjacencyPreserved"] and s["stationIdentityPreserved"]
+          assert s["lineIdentityPreserved"] and s["stageReview"]["preserved"]
+          assert s["postSolverSourceReview"]["passed"]
+          assert a["integrity"]["nativeLineOrderingAccepted"]
+          assert not a["integrity"]["nativeOctiGeometryAccepted"]
+          assert Path("out/stage-diff-line-order.html").exists()
+          print("SOURCE SAFE NATIVE LINE ORDERING PASS; OCTI WAS NOT RUN")
+          PY
       - name: Native source integrity acceptance gate
         run: |
           python - <<'PY'
@@ -121,5 +142,6 @@ jobs:
             out/stage-diff-*.json
             out/stage-diff-native.*
             out/stage-diff-octi-variants.*
+            out/stage-diff-line-order.*
             out/stage-diff-loom-commit.txt
           retention-days: 30
