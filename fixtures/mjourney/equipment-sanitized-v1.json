@@ -1,0 +1,2338 @@
+{
+  "schema": "mjourney-sanitized-equipment-v1",
+  "source": "sss2808/P src/portfolio.html mjSample, independently derived from authored GSA hardware journey; labels and evidence flags are sanitized",
+  "reviewStatus": "unapproved-editorial-projection",
+  "journeyId": "equipment-public-demo",
+  "phases": [
+    "Awareness and scoping",
+    "Internal alignment",
+    "Evaluation and selection",
+    "Execution and proving",
+    "Lifecycle"
+  ],
+  "stages": [
+    {
+      "id": "stage-1",
+      "order": 0,
+      "shortName": "Business need",
+      "name": "Business Trigger and Need Definition"
+    },
+    {
+      "id": "stage-2",
+      "order": 1,
+      "shortName": "Feasibility",
+      "name": "Feasibility, Concept Design and Requirements Framing"
+    },
+    {
+      "id": "stage-3",
+      "order": 2,
+      "shortName": "Business case",
+      "name": "Business Case and Funding Strategy"
+    },
+    {
+      "id": "stage-4",
+      "order": 3,
+      "shortName": "Authorization",
+      "name": "Governance Approval and Project Authorization"
+    },
+    {
+      "id": "stage-5",
+      "order": 4,
+      "shortName": "Vendor selection",
+      "name": "Requirements Finalization, Vendor Evaluation and Down-Selection"
+    },
+    {
+      "id": "stage-6",
+      "order": 5,
+      "shortName": "PO & readiness",
+      "name": "Contracting, PO & Site Readiness"
+    },
+    {
+      "id": "stage-7",
+      "order": 6,
+      "shortName": "Delivery & testing",
+      "name": "Delivery, Installation, Acceptance Testing and Commissioning"
+    },
+    {
+      "id": "stage-8",
+      "order": 7,
+      "shortName": "GMP release",
+      "name": "Qualification, Validation and Release to GMP"
+    },
+    {
+      "id": "stage-9",
+      "order": 8,
+      "shortName": "Handover",
+      "name": "Training, Handover and Ramp-Up"
+    },
+    {
+      "id": "stage-10",
+      "order": 9,
+      "shortName": "Lifecycle",
+      "name": "Lifecycle Performance, Service and Renewal Planning"
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer-0",
+      "order": 0,
+      "name": "Journey sequence",
+      "color": "#3575c4"
+    },
+    {
+      "id": "layer-1",
+      "order": 1,
+      "name": "Design partners",
+      "color": "#df5289"
+    },
+    {
+      "id": "layer-2",
+      "order": 2,
+      "name": "Customer relationship",
+      "color": "#00a2ba"
+    },
+    {
+      "id": "layer-3",
+      "order": 3,
+      "name": "Procurement",
+      "color": "#d5a325"
+    },
+    {
+      "id": "layer-4",
+      "order": 4,
+      "name": "Technical / validation",
+      "color": "#8454be"
+    },
+    {
+      "id": "layer-5",
+      "order": 5,
+      "name": "Documentation",
+      "color": "#dd8452"
+    },
+    {
+      "id": "layer-6",
+      "order": 6,
+      "name": "Service / lifecycle",
+      "color": "#379c70"
+    }
+  ],
+  "moments": [
+    {
+      "id": "eq01",
+      "label": "Need emerges",
+      "stageId": "stage-1",
+      "layerId": "layer-0",
+      "type": "trigger",
+      "role": "initiator",
+      "key": true,
+      "decision": false,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq02",
+      "label": "Sponsor identified",
+      "stageId": "stage-1",
+      "layerId": "layer-2",
+      "type": "activity",
+      "role": "sponsor",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq03",
+      "label": "Scope framed",
+      "stageId": "stage-1",
+      "layerId": "layer-0",
+      "type": "activity",
+      "role": "implementer",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq04",
+      "label": "Budget/timing estimated",
+      "stageId": "stage-1",
+      "layerId": "layer-3",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq05",
+      "label": "Need documented",
+      "stageId": "stage-1",
+      "layerId": "layer-0",
+      "type": "artifact",
+      "role": "author",
+      "key": true,
+      "decision": false,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq06",
+      "label": "Feasibility starts",
+      "stageId": "stage-2",
+      "layerId": "layer-0",
+      "type": "activity",
+      "role": "implementer",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq07",
+      "label": "Design partner path decided",
+      "stageId": "stage-2",
+      "layerId": "layer-1",
+      "type": "decision",
+      "role": "approver",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq08",
+      "label": "Space/utilities assessed",
+      "stageId": "stage-2",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq09",
+      "label": "Options compared",
+      "stageId": "stage-2",
+      "layerId": "layer-4",
+      "type": "decision",
+      "role": "evaluator",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq10",
+      "label": "Sourcing path set",
+      "stageId": "stage-2",
+      "layerId": "layer-0",
+      "type": "decision",
+      "role": "decision_maker",
+      "key": true,
+      "decision": true,
+      "lifecycle": true,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq11",
+      "label": "Site risks assessed",
+      "stageId": "stage-2",
+      "layerId": "layer-4",
+      "type": "review",
+      "role": "reviewer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq12",
+      "label": "Layouts developed",
+      "stageId": "stage-2",
+      "layerId": "layer-1",
+      "type": "artifact",
+      "role": "author",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq13",
+      "label": "Draft URS",
+      "stageId": "stage-2",
+      "layerId": "layer-5",
+      "type": "artifact",
+      "role": "author",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq14",
+      "label": "TCO estimated",
+      "stageId": "stage-2",
+      "layerId": "layer-3",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq15",
+      "label": "Feasibility complete",
+      "stageId": "stage-2",
+      "layerId": "layer-0",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq16",
+      "label": "Concept approved",
+      "stageId": "stage-2",
+      "layerId": "layer-0",
+      "type": "approval",
+      "role": "approver",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq17",
+      "label": "Business case starts",
+      "stageId": "stage-3",
+      "layerId": "layer-0",
+      "type": "activity",
+      "role": "implementer",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq18",
+      "label": "Exec summary drafted",
+      "stageId": "stage-3",
+      "layerId": "layer-2",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq19",
+      "label": "Strategic rationale",
+      "stageId": "stage-3",
+      "layerId": "layer-2",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq20",
+      "label": "Cost refined",
+      "stageId": "stage-3",
+      "layerId": "layer-3",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq21",
+      "label": "Financial metrics",
+      "stageId": "stage-3",
+      "layerId": "layer-3",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq22",
+      "label": "Risk mitigation",
+      "stageId": "stage-3",
+      "layerId": "layer-4",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq23",
+      "label": "Business case compiled",
+      "stageId": "stage-3",
+      "layerId": "layer-0",
+      "type": "artifact",
+      "role": "author",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq24",
+      "label": "Internal alignment",
+      "stageId": "stage-3",
+      "layerId": "layer-2",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq25",
+      "label": "Governance route",
+      "stageId": "stage-4",
+      "layerId": "layer-3",
+      "type": "decision",
+      "role": "decision_maker",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq26",
+      "label": "Technical review",
+      "stageId": "stage-4",
+      "layerId": "layer-4",
+      "type": "review",
+      "role": "reviewer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq27",
+      "label": "Quality review",
+      "stageId": "stage-4",
+      "layerId": "layer-4",
+      "type": "review",
+      "role": "reviewer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq28",
+      "label": "Pre-alignment",
+      "stageId": "stage-4",
+      "layerId": "layer-2",
+      "type": "review",
+      "role": "reviewer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq29",
+      "label": "Financial review",
+      "stageId": "stage-4",
+      "layerId": "layer-3",
+      "type": "gate",
+      "role": "gatekeeper",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq30",
+      "label": "Investment review",
+      "stageId": "stage-4",
+      "layerId": "layer-3",
+      "type": "gate",
+      "role": "approver",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq31",
+      "label": "Funding authorized",
+      "stageId": "stage-4",
+      "layerId": "layer-0",
+      "type": "approval",
+      "role": "approver",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq32",
+      "label": "Design partner specs",
+      "stageId": "stage-5",
+      "layerId": "layer-1",
+      "type": "artifact",
+      "role": "specifier",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq33",
+      "label": "Direct specs",
+      "stageId": "stage-5",
+      "layerId": "layer-4",
+      "type": "artifact",
+      "role": "specifier",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq34",
+      "label": "Design partner shortlist",
+      "stageId": "stage-5",
+      "layerId": "layer-1",
+      "type": "decision",
+      "role": "recommender",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq35",
+      "label": "Vendor selection",
+      "stageId": "stage-5",
+      "layerId": "layer-3",
+      "type": "decision",
+      "role": "evaluator",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq36",
+      "label": "Design partner recommendation",
+      "stageId": "stage-5",
+      "layerId": "layer-1",
+      "type": "handoff",
+      "role": "recommender",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "contextual"
+    },
+    {
+      "id": "eq37",
+      "label": "Vendor selected",
+      "stageId": "stage-5",
+      "layerId": "layer-0",
+      "type": "commitment",
+      "role": "decision_maker",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq38",
+      "label": "Contract executed",
+      "stageId": "stage-6",
+      "layerId": "layer-3",
+      "type": "commitment",
+      "role": "signer",
+      "key": true,
+      "decision": true,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq39",
+      "label": "PO issued",
+      "stageId": "stage-6",
+      "layerId": "layer-0",
+      "type": "commitment",
+      "role": "buyer",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq40",
+      "label": "Execution launched",
+      "stageId": "stage-6",
+      "layerId": "layer-2",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq41",
+      "label": "Vendor design",
+      "stageId": "stage-6",
+      "layerId": "layer-5",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq42",
+      "label": "Site prep planned",
+      "stageId": "stage-6",
+      "layerId": "layer-4",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq43",
+      "label": "Validation strategy",
+      "stageId": "stage-6",
+      "layerId": "layer-4",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq44",
+      "label": "Logistics planned",
+      "stageId": "stage-6",
+      "layerId": "layer-3",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq45",
+      "label": "FAT prepared",
+      "stageId": "stage-6",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq46",
+      "label": "FAT witnessed",
+      "stageId": "stage-6",
+      "layerId": "layer-4",
+      "type": "gate",
+      "role": "evaluator",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq47",
+      "label": "Delivered",
+      "stageId": "stage-7",
+      "layerId": "layer-0",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq48",
+      "label": "Receiving inspection",
+      "stageId": "stage-7",
+      "layerId": "layer-4",
+      "type": "review",
+      "role": "reviewer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq49",
+      "label": "Installed",
+      "stageId": "stage-7",
+      "layerId": "layer-6",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq50",
+      "label": "Automation configured",
+      "stageId": "stage-7",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "implementer",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq51",
+      "label": "Commissioned",
+      "stageId": "stage-7",
+      "layerId": "layer-4",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq52",
+      "label": "C&Q handover",
+      "stageId": "stage-7",
+      "layerId": "layer-4",
+      "type": "handoff",
+      "role": "handoff_owner",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq53",
+      "label": "Validation starts",
+      "stageId": "stage-8",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "implementer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq54",
+      "label": "DQ confirmed",
+      "stageId": "stage-8",
+      "layerId": "layer-5",
+      "type": "review",
+      "role": "validator",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq55",
+      "label": "IQ executed",
+      "stageId": "stage-8",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "validator",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq56",
+      "label": "OQ executed",
+      "stageId": "stage-8",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "validator",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq57",
+      "label": "PQ completed",
+      "stageId": "stage-8",
+      "layerId": "layer-4",
+      "type": "activity",
+      "role": "validator",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq58",
+      "label": "Validation approved",
+      "stageId": "stage-8",
+      "layerId": "layer-5",
+      "type": "approval",
+      "role": "approver",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq59",
+      "label": "Released to production",
+      "stageId": "stage-8",
+      "layerId": "layer-0",
+      "type": "approval",
+      "role": "approver",
+      "key": true,
+      "decision": true,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq60",
+      "label": "Handover",
+      "stageId": "stage-9",
+      "layerId": "layer-6",
+      "type": "handoff",
+      "role": "handoff_owner",
+      "key": false,
+      "decision": true,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq61",
+      "label": "SOPs released",
+      "stageId": "stage-9",
+      "layerId": "layer-5",
+      "type": "artifact",
+      "role": "author",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq62",
+      "label": "Training complete",
+      "stageId": "stage-9",
+      "layerId": "layer-6",
+      "type": "outcome",
+      "role": "trainer",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq63",
+      "label": "Production stabilized",
+      "stageId": "stage-9",
+      "layerId": "layer-6",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq64",
+      "label": "Project closed",
+      "stageId": "stage-9",
+      "layerId": "layer-0",
+      "type": "outcome",
+      "role": "accountable_owner",
+      "key": true,
+      "decision": true,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq65",
+      "label": "Operate/maintain",
+      "stageId": "stage-10",
+      "layerId": "layer-6",
+      "type": "lifecycle_event",
+      "role": "operator",
+      "key": false,
+      "decision": false,
+      "lifecycle": true,
+      "evidenceRefPresent": true,
+      "evidenceClass": "corroborated"
+    },
+    {
+      "id": "eq66",
+      "label": "Changes/upgrades",
+      "stageId": "stage-10",
+      "layerId": "layer-6",
+      "type": "lifecycle_event",
+      "role": "change_owner",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    },
+    {
+      "id": "eq67",
+      "label": "End-of-life",
+      "stageId": "stage-10",
+      "layerId": "layer-0",
+      "type": "lifecycle_event",
+      "role": "asset_owner",
+      "key": true,
+      "decision": true,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "expert_inference"
+    }
+  ],
+  "connections": [
+    {
+      "id": "edge01",
+      "fromId": "eq01",
+      "toId": "eq02",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge02",
+      "fromId": "eq02",
+      "toId": "eq03",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge03",
+      "fromId": "eq03",
+      "toId": "eq04",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge04",
+      "fromId": "eq03",
+      "toId": "eq05",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge05",
+      "fromId": "eq04",
+      "toId": "eq05",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge06",
+      "fromId": "eq05",
+      "toId": "eq06",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge07",
+      "fromId": "eq06",
+      "toId": "eq08",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge08",
+      "fromId": "eq06",
+      "toId": "eq07",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge09",
+      "fromId": "eq06",
+      "toId": "eq09",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge10",
+      "fromId": "eq07",
+      "toId": "eq10",
+      "kind": "dependency",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge11",
+      "fromId": "eq08",
+      "toId": "eq11",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge12",
+      "fromId": "eq09",
+      "toId": "eq14",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge13",
+      "fromId": "eq09",
+      "toId": "eq10",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge14",
+      "fromId": "eq10",
+      "toId": "eq13",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge15",
+      "fromId": "eq10",
+      "toId": "eq12",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge16",
+      "fromId": "eq10",
+      "toId": "eq15",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge17",
+      "fromId": "eq11",
+      "toId": "eq15",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge18",
+      "fromId": "eq12",
+      "toId": "eq15",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge19",
+      "fromId": "eq13",
+      "toId": "eq15",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge20",
+      "fromId": "eq14",
+      "toId": "eq15",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge21",
+      "fromId": "eq15",
+      "toId": "eq16",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge22",
+      "fromId": "eq16",
+      "toId": "eq17",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge23",
+      "fromId": "eq17",
+      "toId": "eq18",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge24",
+      "fromId": "eq17",
+      "toId": "eq19",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge25",
+      "fromId": "eq17",
+      "toId": "eq20",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge26",
+      "fromId": "eq17",
+      "toId": "eq22",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge27",
+      "fromId": "eq17",
+      "toId": "eq23",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge28",
+      "fromId": "eq20",
+      "toId": "eq21",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge29",
+      "fromId": "eq18",
+      "toId": "eq23",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge30",
+      "fromId": "eq19",
+      "toId": "eq23",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge31",
+      "fromId": "eq21",
+      "toId": "eq23",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge32",
+      "fromId": "eq22",
+      "toId": "eq23",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge33",
+      "fromId": "eq23",
+      "toId": "eq24",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge34",
+      "fromId": "eq24",
+      "toId": "eq25",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge35",
+      "fromId": "eq25",
+      "toId": "eq26",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge36",
+      "fromId": "eq25",
+      "toId": "eq27",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge37",
+      "fromId": "eq25",
+      "toId": "eq28",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge38",
+      "fromId": "eq25",
+      "toId": "eq30",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge39",
+      "fromId": "eq28",
+      "toId": "eq29",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge40",
+      "fromId": "eq26",
+      "toId": "eq30",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge41",
+      "fromId": "eq27",
+      "toId": "eq30",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge42",
+      "fromId": "eq29",
+      "toId": "eq30",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge43",
+      "fromId": "eq30",
+      "toId": "eq31",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge44",
+      "fromId": "eq31",
+      "toId": "eq32",
+      "kind": "branch",
+      "routeId": "ae_epc_mediated",
+      "primary": true
+    },
+    {
+      "id": "edge45",
+      "fromId": "eq31",
+      "toId": "eq33",
+      "kind": "branch",
+      "routeId": "direct_customer_led",
+      "primary": true
+    },
+    {
+      "id": "edge46",
+      "fromId": "eq10",
+      "toId": "eq32",
+      "kind": "dependency",
+      "routeId": "ae_epc_mediated",
+      "primary": false
+    },
+    {
+      "id": "edge47",
+      "fromId": "eq10",
+      "toId": "eq33",
+      "kind": "dependency",
+      "routeId": "direct_customer_led",
+      "primary": false
+    },
+    {
+      "id": "edge48",
+      "fromId": "eq32",
+      "toId": "eq34",
+      "kind": "sequence",
+      "routeId": "ae_epc_mediated",
+      "primary": true
+    },
+    {
+      "id": "edge49",
+      "fromId": "eq34",
+      "toId": "eq36",
+      "kind": "sequence",
+      "routeId": "ae_epc_mediated",
+      "primary": true
+    },
+    {
+      "id": "edge50",
+      "fromId": "eq36",
+      "toId": "eq37",
+      "kind": "convergence",
+      "routeId": "ae_epc_mediated",
+      "primary": true
+    },
+    {
+      "id": "edge51",
+      "fromId": "eq33",
+      "toId": "eq35",
+      "kind": "sequence",
+      "routeId": "direct_customer_led",
+      "primary": true
+    },
+    {
+      "id": "edge52",
+      "fromId": "eq35",
+      "toId": "eq37",
+      "kind": "convergence",
+      "routeId": "direct_customer_led",
+      "primary": true
+    },
+    {
+      "id": "edge53",
+      "fromId": "eq37",
+      "toId": "eq38",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge54",
+      "fromId": "eq38",
+      "toId": "eq39",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge55",
+      "fromId": "eq39",
+      "toId": "eq40",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge56",
+      "fromId": "eq40",
+      "toId": "eq41",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge57",
+      "fromId": "eq41",
+      "toId": "eq42",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge58",
+      "fromId": "eq41",
+      "toId": "eq43",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge59",
+      "fromId": "eq41",
+      "toId": "eq44",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge60",
+      "fromId": "eq41",
+      "toId": "eq45",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge61",
+      "fromId": "eq45",
+      "toId": "eq46",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge62",
+      "fromId": "eq46",
+      "toId": "eq47",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge63",
+      "fromId": "eq42",
+      "toId": "eq47",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge64",
+      "fromId": "eq44",
+      "toId": "eq47",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge65",
+      "fromId": "eq43",
+      "toId": "eq53",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge66",
+      "fromId": "eq47",
+      "toId": "eq48",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge67",
+      "fromId": "eq48",
+      "toId": "eq49",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge68",
+      "fromId": "eq49",
+      "toId": "eq50",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge69",
+      "fromId": "eq50",
+      "toId": "eq51",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge70",
+      "fromId": "eq51",
+      "toId": "eq52",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge71",
+      "fromId": "eq52",
+      "toId": "eq53",
+      "kind": "handoff",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge72",
+      "fromId": "eq53",
+      "toId": "eq54",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge73",
+      "fromId": "eq54",
+      "toId": "eq55",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge74",
+      "fromId": "eq55",
+      "toId": "eq56",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge75",
+      "fromId": "eq56",
+      "toId": "eq57",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge76",
+      "fromId": "eq57",
+      "toId": "eq58",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge77",
+      "fromId": "eq58",
+      "toId": "eq59",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge78",
+      "fromId": "eq59",
+      "toId": "eq60",
+      "kind": "handoff",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge79",
+      "fromId": "eq60",
+      "toId": "eq61",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge80",
+      "fromId": "eq60",
+      "toId": "eq62",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge81",
+      "fromId": "eq61",
+      "toId": "eq62",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": false
+    },
+    {
+      "id": "edge82",
+      "fromId": "eq62",
+      "toId": "eq63",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge83",
+      "fromId": "eq63",
+      "toId": "eq64",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge84",
+      "fromId": "eq64",
+      "toId": "eq65",
+      "kind": "handoff",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge85",
+      "fromId": "eq65",
+      "toId": "eq66",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge86",
+      "fromId": "eq66",
+      "toId": "eq67",
+      "kind": "sequence",
+      "routeId": "all",
+      "primary": true
+    },
+    {
+      "id": "edge87",
+      "fromId": "eq67",
+      "toId": "eq01",
+      "kind": "lifecycle_return",
+      "routeId": "all",
+      "primary": true
+    }
+  ],
+  "curatedStationIds": [
+    "eq01",
+    "eq02",
+    "eq05",
+    "eq06",
+    "eq10",
+    "eq13",
+    "eq15",
+    "eq16",
+    "eq18",
+    "eq23",
+    "eq31",
+    "eq32",
+    "eq33",
+    "eq34",
+    "eq35",
+    "eq36",
+    "eq37",
+    "eq38",
+    "eq39",
+    "eq41",
+    "eq43",
+    "eq47",
+    "eq54",
+    "eq59",
+    "eq64",
+    "eq65",
+    "eq66",
+    "eq67"
+  ],
+  "editorialPositions": {
+    "eq01": {
+      "x": 215,
+      "y": 305
+    },
+    "eq05": {
+      "x": 280,
+      "y": 305
+    },
+    "eq06": {
+      "x": 345,
+      "y": 305
+    },
+    "eq10": {
+      "x": 410,
+      "y": 305
+    },
+    "eq13": {
+      "x": 455,
+      "y": 685
+    },
+    "eq15": {
+      "x": 490,
+      "y": 305
+    },
+    "eq16": {
+      "x": 550,
+      "y": 305
+    },
+    "eq23": {
+      "x": 635,
+      "y": 305
+    },
+    "eq31": {
+      "x": 735,
+      "y": 305
+    },
+    "eq32": {
+      "x": 855,
+      "y": 425
+    },
+    "eq34": {
+      "x": 940,
+      "y": 425
+    },
+    "eq36": {
+      "x": 1020,
+      "y": 425
+    },
+    "eq33": {
+      "x": 855,
+      "y": 625
+    },
+    "eq35": {
+      "x": 1020,
+      "y": 565
+    },
+    "eq37": {
+      "x": 1140,
+      "y": 305
+    },
+    "eq39": {
+      "x": 1195,
+      "y": 305
+    },
+    "eq47": {
+      "x": 1260,
+      "y": 305
+    },
+    "eq59": {
+      "x": 1320,
+      "y": 305
+    },
+    "eq64": {
+      "x": 1380,
+      "y": 305
+    },
+    "eq65": {
+      "x": 1440,
+      "y": 765
+    },
+    "eq66": {
+      "x": 1490,
+      "y": 765
+    },
+    "eq67": {
+      "x": 1540,
+      "y": 305
+    }
+  },
+  "editorialPathCandidates": [
+    {
+      "id": "s01",
+      "fromId": "eq01",
+      "toId": "eq05",
+      "sourceEdgeIds": [
+        "edge01",
+        "edge02",
+        "edge04"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          215,
+          305
+        ],
+        [
+          280,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s02",
+      "fromId": "eq05",
+      "toId": "eq06",
+      "sourceEdgeIds": [
+        "edge06"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          280,
+          305
+        ],
+        [
+          345,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s03",
+      "fromId": "eq06",
+      "toId": "eq10",
+      "sourceEdgeIds": [
+        "edge08",
+        "edge10"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          345,
+          305
+        ],
+        [
+          410,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s04",
+      "fromId": "eq10",
+      "toId": "eq15",
+      "sourceEdgeIds": [
+        "edge16"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          410,
+          305
+        ],
+        [
+          490,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s05",
+      "fromId": "eq15",
+      "toId": "eq16",
+      "sourceEdgeIds": [
+        "edge21"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          490,
+          305
+        ],
+        [
+          550,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s06",
+      "fromId": "eq16",
+      "toId": "eq23",
+      "sourceEdgeIds": [
+        "edge22",
+        "edge27"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          550,
+          305
+        ],
+        [
+          635,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s07",
+      "fromId": "eq23",
+      "toId": "eq31",
+      "sourceEdgeIds": [
+        "edge33",
+        "edge34",
+        "edge38",
+        "edge43"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          635,
+          305
+        ],
+        [
+          735,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "a01",
+      "fromId": "eq31",
+      "toId": "eq32",
+      "sourceEdgeIds": [
+        "edge44"
+      ],
+      "displayFamily": "ae",
+      "points": [
+        [
+          735,
+          305
+        ],
+        [
+          855,
+          425
+        ]
+      ]
+    },
+    {
+      "id": "a02",
+      "fromId": "eq32",
+      "toId": "eq34",
+      "sourceEdgeIds": [
+        "edge48"
+      ],
+      "displayFamily": "ae",
+      "points": [
+        [
+          855,
+          425
+        ],
+        [
+          940,
+          425
+        ]
+      ]
+    },
+    {
+      "id": "a03",
+      "fromId": "eq34",
+      "toId": "eq36",
+      "sourceEdgeIds": [
+        "edge49"
+      ],
+      "displayFamily": "ae",
+      "points": [
+        [
+          940,
+          425
+        ],
+        [
+          1020,
+          425
+        ]
+      ]
+    },
+    {
+      "id": "a04",
+      "fromId": "eq36",
+      "toId": "eq37",
+      "sourceEdgeIds": [
+        "edge50"
+      ],
+      "displayFamily": "ae",
+      "points": [
+        [
+          1020,
+          425
+        ],
+        [
+          1140,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "d01",
+      "fromId": "eq31",
+      "toId": "eq33",
+      "sourceEdgeIds": [
+        "edge45"
+      ],
+      "displayFamily": "direct",
+      "points": [
+        [
+          735,
+          305
+        ],
+        [
+          735,
+          505
+        ],
+        [
+          855,
+          625
+        ]
+      ]
+    },
+    {
+      "id": "d02",
+      "fromId": "eq33",
+      "toId": "eq35",
+      "sourceEdgeIds": [
+        "edge51"
+      ],
+      "displayFamily": "direct",
+      "points": [
+        [
+          855,
+          625
+        ],
+        [
+          960,
+          625
+        ],
+        [
+          1020,
+          565
+        ]
+      ]
+    },
+    {
+      "id": "d03",
+      "fromId": "eq35",
+      "toId": "eq37",
+      "sourceEdgeIds": [
+        "edge52"
+      ],
+      "displayFamily": "direct",
+      "points": [
+        [
+          1020,
+          565
+        ],
+        [
+          1140,
+          445
+        ],
+        [
+          1140,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s08",
+      "fromId": "eq37",
+      "toId": "eq39",
+      "sourceEdgeIds": [
+        "edge53",
+        "edge54"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          1140,
+          305
+        ],
+        [
+          1195,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s09",
+      "fromId": "eq39",
+      "toId": "eq47",
+      "sourceEdgeIds": [
+        "edge55",
+        "edge56",
+        "edge60",
+        "edge61",
+        "edge62"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          1195,
+          305
+        ],
+        [
+          1260,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s10",
+      "fromId": "eq47",
+      "toId": "eq59",
+      "sourceEdgeIds": [
+        "edge66",
+        "edge67",
+        "edge68",
+        "edge69",
+        "edge70",
+        "edge71",
+        "edge72",
+        "edge73",
+        "edge74",
+        "edge75",
+        "edge76",
+        "edge77"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          1260,
+          305
+        ],
+        [
+          1320,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "s11",
+      "fromId": "eq59",
+      "toId": "eq64",
+      "sourceEdgeIds": [
+        "edge78",
+        "edge80",
+        "edge82",
+        "edge83"
+      ],
+      "displayFamily": "shared",
+      "points": [
+        [
+          1320,
+          305
+        ],
+        [
+          1380,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "n01",
+      "fromId": "eq10",
+      "toId": "eq13",
+      "sourceEdgeIds": [
+        "edge14"
+      ],
+      "displayFamily": "documentation",
+      "points": [
+        [
+          410,
+          305
+        ],
+        [
+          410,
+          640
+        ],
+        [
+          455,
+          685
+        ]
+      ]
+    },
+    {
+      "id": "n02",
+      "fromId": "eq13",
+      "toId": "eq15",
+      "sourceEdgeIds": [
+        "edge19"
+      ],
+      "displayFamily": "documentation",
+      "points": [
+        [
+          455,
+          685
+        ],
+        [
+          490,
+          650
+        ],
+        [
+          490,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "l01",
+      "fromId": "eq64",
+      "toId": "eq65",
+      "sourceEdgeIds": [
+        "edge84"
+      ],
+      "displayFamily": "lifecycle",
+      "points": [
+        [
+          1380,
+          305
+        ],
+        [
+          1380,
+          705
+        ],
+        [
+          1440,
+          765
+        ]
+      ]
+    },
+    {
+      "id": "l02",
+      "fromId": "eq65",
+      "toId": "eq66",
+      "sourceEdgeIds": [
+        "edge85"
+      ],
+      "displayFamily": "lifecycle",
+      "points": [
+        [
+          1440,
+          765
+        ],
+        [
+          1490,
+          765
+        ]
+      ]
+    },
+    {
+      "id": "l03",
+      "fromId": "eq66",
+      "toId": "eq67",
+      "sourceEdgeIds": [
+        "edge86"
+      ],
+      "displayFamily": "lifecycle",
+      "points": [
+        [
+          1490,
+          765
+        ],
+        [
+          1540,
+          715
+        ],
+        [
+          1540,
+          305
+        ]
+      ]
+    },
+    {
+      "id": "l04",
+      "fromId": "eq67",
+      "toId": "eq01",
+      "sourceEdgeIds": [
+        "edge87"
+      ],
+      "displayFamily": "lifecycle",
+      "points": [
+        [
+          1540,
+          305
+        ],
+        [
+          1560,
+          325
+        ],
+        [
+          1560,
+          855
+        ],
+        [
+          175,
+          855
+        ],
+        [
+          175,
+          345
+        ],
+        [
+          215,
+          305
+        ]
+      ]
+    }
+  ]
+}

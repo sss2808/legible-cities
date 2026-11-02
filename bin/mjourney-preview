@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Build source-backed M-Journey diagrams with the *original* Legible Cities renderer.
+
+--network selects the research-source-connected topology instead of the older
+organizational guides. --html emits the original Legible Cities interactive
+page (Schematic/Linear and line/label toggles) with irrelevant timetable and
+passenger-trip affordances suppressed, not rewritten as a custom map.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from schematic import animate  # noqa: E402
+from schematic.mjourney import build_network_projection, build_system_v3, from_json  # noqa: E402
+from schematic.render import Style, render  # noqa: E402
+
+DEFAULT_SOURCE = ROOT / "fixtures/mjourney/equipment-sanitized-v1.json"
+
+
+def viewer_for_journey(page: str) -> str:
+    """Preserve native page and controls, remove transport-specific UI.
+
+    The compiled page remains the upstream Legible Cities HTML/JS/CSS. This is
+    only a *no-schedule presentation mode*: no timetable, no passenger paths,
+    and no clickable route claims on organizational source relationships.
+    No modification of the original renderer or globally shared viewer.
+    """
+    ident = '<meta charset="utf-8">'
+    prepaint = (ident + '\n'
+                '<script>document.documentElement.setAttribute("data-mjourney", "")</script>')
+    if ident not in page:
+        raise ValueError("Legible Cities HTML has no known metadata seam")
+    page = page.replace(ident, prepaint, 1)
+    css = """
+  /* M-Journey has no GTFS trains, clock, or service day. Source line controls
+     and original Schematic/Linear viewer still work exactly as upstream. */
+  :root[data-mjourney] #view-string,
+  :root[data-mjourney] header .bar:nth-of-type(2),
+  :root[data-mjourney] #more,
+  :root[data-mjourney] #trip { display: none !important; }
+  :root[data-mjourney] #more-panel { display: block !important; margin-top: 0.3rem; }
+  :root[data-mjourney] #stage { padding: 0.55rem 0.9rem; }
+"""
+    if "</style>" not in page:
+        raise ValueError("Legible Cities HTML has no style seam")
+    page = page.replace("</style>", css + "</style>", 1)
+    # Native station clicks request a passenger trip, which would misrepresent
+    # research relationships as interchangeable transit. Intercept them; retain
+    # upstream Schematic/Linear, Labels and line filter button handlers.
+    stop_route_picker = """
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const stage = document.getElementById("stage");
+  stage.addEventListener("click", e => e.stopImmediatePropagation(), true);
+  stage.addEventListener("keydown", e => {
+    if (["Enter", " ", "ArrowLeft", "ArrowRight"].includes(e.key))
+      e.stopImmediatePropagation();
+  }, true);
+});
+</script>
+"""
+    page = page.replace("</html>", stop_route_picker + "</html>", 1)
+    return page
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
+    parser.add_argument("--output", type=Path,
+                        default=ROOT / "out/mjourney-equipment-schematic.svg")
+    parser.add_argument("--system-v3", action="store_true",
+                        help="Native System schematic with stable seven-line category membership")
+    parser.add_argument("--network", action="store_true",
+                        help="Use actual authored graph topology and cross-layer transitions")
+    parser.add_argument("--full", action="store_true",
+                        help="Show all eligible source edges rather than a readable focused subset")
+    parser.add_argument("--html", action="store_true",
+                        help="Also create the upstream Legible Cities Schematic/Linear viewer")
+    parser.add_argument("--width", type=float, default=1850.0)
+    args = parser.parse_args(argv)
+
+    source = json.loads(args.source.read_text(encoding="utf-8"))
+    if args.system_v3 or args.network:
+        projection = (build_system_v3(source) if args.system_v3
+                      else build_network_projection(source, full=args.full))
+        # CDMX-equivalent warm-dark theme, using native Legible Cities styles.
+        style = Style(
+            background="#1f1915", station_fill="#f2ede6",
+            station_stroke_color="#15120f", label_color="#f2ede6",
+            line_width=10, line_gap=1.55,
+            station_radius=4.5, interchange_radius=6.2,
+            station_stroke=2, label_size=11.5, label_offset=10,
+            padding=17, themed=True,
+        )
+        palette = {
+            layer["name"]: layer["color"] for layer in projection.layers
+        }
+    else:
+        selection = [m["id"] for m in source["moments"]] if args.full else None
+        projection = from_json(args.source, station_ids=selection)
+        style = Style()
+        palette = {layer["name"]: layer["color"] for layer in projection.layers}
+    order = [layer["name"] for layer in projection.layers]
+    result = render(projection.graph, width=args.width, style=style,
+                    line_order=order, colors=palette)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(result.svg, encoding="utf-8")
+    audit = args.output.with_suffix(".audit.json")
+    report = dict(projection.audit)
+    report["render"] = {
+        "engine": "schematic.render.render (original Legible Cities)",
+        "stations": len(projection.graph.stations),
+        "tracks": len(result.tracks),
+        "droppedLabels": result.dropped_labels,
+        "svg": args.output.name,
+        "timetable": None,
+        "routingEnabled": False,
+        "stageConstraintStatus": (
+            "source-index layout stage gutters; editorial visual review required"
+            if args.network or args.system_v3 else "coordinate seeds only; visual review required"),
+    }
+    if args.html:
+        anim = animate.build(result, projection.graph, [], dt.date(2026, 11, 2),
+                             line_order=order)
+        page = animate.texts(
+            anim, result.svg, stem=args.output.stem,
+            title=("B2B channel journey | M-Journey" if source["journeyId"] == "b2b-starter"
+                   else "Equipment buying journey | M-Journey"),
+            name=("B2B channel journey" if source["journeyId"] == "b2b-starter"
+                  else "Equipment buying journey"),
+            subtitle="Source-backed transitions · no timetable",
+            back="https://github.com/sss2808/legible-cities/pull/1",
+        )[f"{args.output.stem}.html"]
+        viewer = args.output.with_suffix(".html")
+        viewer.write_text(viewer_for_journey(page), encoding="utf-8")
+        report["render"]["viewer"] = viewer.name
+        report["render"]["viewerModes"] = ["schematic", "linear"]
+        print(f"Native interactive viewer: {viewer}")
+    audit.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(f"SVG: {args.output}")
+    print(f"Audit: {audit}")
+    print(f"{len(projection.graph.stations)} stations; {len(result.tracks)} tracks; "
+          f"{len(result.dropped_labels)} dropped labels")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

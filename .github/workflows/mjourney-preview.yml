@@ -1,0 +1,55 @@
+name: M-Journey fork renderer preview
+
+on:
+  push:
+    branches:
+      - feature/mjourney-transit-adapter
+  pull_request:
+    paths:
+      - "src/schematic/mjourney.py"
+      - "fixtures/mjourney/**"
+      - "tests/test_mjourney.py"
+      - "bin/mjourney-preview"
+      - ".github/workflows/mjourney-preview.yml"
+  workflow_dispatch:
+
+jobs:
+  native-renderer-preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install project and test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Validate source graph and projection
+        run: python -m pytest -q tests/test_mjourney.py
+      - name: Generate curated schematic with original renderer
+        run: python bin/mjourney-preview --network --html --output out/mjourney-equipment-curated.svg
+      - name: Generate all-moments stress schematic
+        run: python bin/mjourney-preview --network --full --html --output out/mjourney-equipment-full.svg
+      - name: Generate B2B cross-channel network with original renderer
+        run: python bin/mjourney-preview --source fixtures/mjourney/b2b-starter-v1.json --network --full --html --output out/mjourney-b2b.svg
+      - name: Generate System V3 with native renderer
+        run: python bin/mjourney-preview --system-v3 --html --output out/mjourney-equipment-system-v3.svg
+      - name: Publish review artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mjourney-native-renderer-first-look
+          path: |
+            out/mjourney-equipment-curated.svg
+            out/mjourney-equipment-curated.html
+            out/mjourney-equipment-curated.audit.json
+            out/mjourney-equipment-full.svg
+            out/mjourney-equipment-full.html
+            out/mjourney-equipment-full.audit.json
+            out/mjourney-b2b.svg
+            out/mjourney-b2b.html
+            out/mjourney-b2b.audit.json
+            out/mjourney-equipment-system-v3.svg
+            out/mjourney-equipment-system-v3.html
+            out/mjourney-equipment-system-v3.audit.json
+          retention-days: 14

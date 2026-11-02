@@ -1,0 +1,482 @@
+{
+  "schema": "mjourney-sanitized-journey-v1",
+  "journeyId": "b2b-starter",
+  "source": "sss2808/m-journey docs/journey-template/ (instructional starter journey, not a research finding)",
+  "reviewStatus": "instructional-source-topology-projection",
+  "phases": [
+    "Discovery",
+    "Research",
+    "Selection",
+    "Purchase",
+    "Retention"
+  ],
+  "stages": [
+    {
+      "id": "discovery",
+      "order": 0,
+      "name": "Discovery",
+      "shortName": "Discovery"
+    },
+    {
+      "id": "research",
+      "order": 1,
+      "name": "Research",
+      "shortName": "Research"
+    },
+    {
+      "id": "selection",
+      "order": 2,
+      "name": "Selection",
+      "shortName": "Selection"
+    },
+    {
+      "id": "purchase",
+      "order": 3,
+      "name": "Purchase",
+      "shortName": "Purchase"
+    },
+    {
+      "id": "retention",
+      "order": 4,
+      "name": "Retention",
+      "shortName": "Retention"
+    }
+  ],
+  "layers": [
+    {
+      "id": "online",
+      "order": 0,
+      "name": "Online",
+      "color": "#3685F4"
+    },
+    {
+      "id": "omni",
+      "order": 1,
+      "name": "Omni",
+      "color": "#16C9D9"
+    },
+    {
+      "id": "offline",
+      "order": 2,
+      "name": "Offline",
+      "color": "#FF9151"
+    }
+  ],
+  "moments": [
+    {
+      "id": "moment-001",
+      "label": "Searches for vendors",
+      "stageId": "discovery",
+      "layerId": "online",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-002",
+      "label": "Defines vendor criteria",
+      "stageId": "discovery",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-003",
+      "label": "Seeks educational materials",
+      "stageId": "discovery",
+      "layerId": "omni",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-004",
+      "label": "Lands on website",
+      "stageId": "discovery",
+      "layerId": "online",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-005",
+      "label": "Requests expert recommendations",
+      "stageId": "discovery",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-006",
+      "label": "Contacts technical support",
+      "stageId": "research",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-007",
+      "label": "Compares vendors",
+      "stageId": "research",
+      "layerId": "online",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-008",
+      "label": "Makes a test purchase",
+      "stageId": "research",
+      "layerId": "omni",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-009",
+      "label": "Maintains supplier communication",
+      "stageId": "research",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-010",
+      "label": "Requests a quote",
+      "stageId": "research",
+      "layerId": "omni",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-011",
+      "label": "Hands needs to procurement",
+      "stageId": "selection",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-012",
+      "label": "Creates account or logs in",
+      "stageId": "selection",
+      "layerId": "online",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-013",
+      "label": "Completes regulatory approval",
+      "stageId": "selection",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-014",
+      "label": "Compares products",
+      "stageId": "selection",
+      "layerId": "online",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-015",
+      "label": "Selects primary vendors",
+      "stageId": "selection",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-016",
+      "label": "Places order",
+      "stageId": "purchase",
+      "layerId": "omni",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": true,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-017",
+      "label": "Tracks order",
+      "stageId": "purchase",
+      "layerId": "omni",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-018",
+      "label": "Receives product",
+      "stageId": "purchase",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": false,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    },
+    {
+      "id": "moment-019",
+      "label": "Gets post-purchase support",
+      "stageId": "retention",
+      "layerId": "offline",
+      "type": "journey-moment",
+      "role": "unspecified",
+      "key": false,
+      "decision": false,
+      "lifecycle": true,
+      "evidenceRefPresent": false,
+      "evidenceClass": "instructional-only"
+    }
+  ],
+  "connections": [
+    {
+      "id": "connection-001",
+      "fromId": "moment-001",
+      "toId": "moment-002",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-002",
+      "fromId": "moment-002",
+      "toId": "moment-003",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-003",
+      "fromId": "moment-003",
+      "toId": "moment-004",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-004",
+      "fromId": "moment-004",
+      "toId": "moment-005",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-005",
+      "fromId": "moment-005",
+      "toId": "moment-006",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-006",
+      "fromId": "moment-006",
+      "toId": "moment-007",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-007",
+      "fromId": "moment-007",
+      "toId": "moment-008",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-008",
+      "fromId": "moment-008",
+      "toId": "moment-009",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-009",
+      "fromId": "moment-009",
+      "toId": "moment-010",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-010",
+      "fromId": "moment-010",
+      "toId": "moment-011",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-011",
+      "fromId": "moment-011",
+      "toId": "moment-012",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-012",
+      "fromId": "moment-012",
+      "toId": "moment-013",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-013",
+      "fromId": "moment-013",
+      "toId": "moment-014",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-014",
+      "fromId": "moment-014",
+      "toId": "moment-015",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-015",
+      "fromId": "moment-015",
+      "toId": "moment-016",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-016",
+      "fromId": "moment-016",
+      "toId": "moment-017",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-017",
+      "fromId": "moment-017",
+      "toId": "moment-018",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    },
+    {
+      "id": "connection-018",
+      "fromId": "moment-018",
+      "toId": "moment-019",
+      "kind": "sequence",
+      "routeId": "main",
+      "primary": true
+    }
+  ],
+  "curatedStationIds": [
+    "moment-001",
+    "moment-002",
+    "moment-003",
+    "moment-004",
+    "moment-005",
+    "moment-006",
+    "moment-007",
+    "moment-008",
+    "moment-009",
+    "moment-010",
+    "moment-011",
+    "moment-012",
+    "moment-013",
+    "moment-014",
+    "moment-015",
+    "moment-016",
+    "moment-017",
+    "moment-018",
+    "moment-019"
+  ],
+  "editorialPathCandidates": []
+}
