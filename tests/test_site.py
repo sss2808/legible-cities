@@ -1965,7 +1965,20 @@ def test_the_page_describes_its_map_once_from_the_layout_it_already_has(tmp_path
                               "read where describeMap() is called")
         assert call > page.index(last), (f"describeMap() runs before {last}, "
                                          "so that layer is not hidden")
-    assert page.count("map-description") == 2 and page.count("paragraph.textContent") == 1
+    # Both browser modes have one description, but their source branches are
+    # mutually exclusive. Counting the whole HTML text rejects valid M-Journey
+    # semantics (two branch-local IDs and two aria-describedby assignments).
+    research, standard = body.split("    const stationName = layout.names || {};", 1)
+    assert "if (isMJourney) {" in research
+    assert research.rstrip().endswith("return;\n    }")
+    for mode in (research, standard):
+        assert mode.count('paragraph.id = "map-description";') == 1
+        assert mode.count('paragraph.className = "sr-only";') == 1
+        assert mode.count('svg.after(paragraph);') == 1
+        assert mode.count('svg.setAttribute("role", "img");') == 1
+        assert mode.count('svg.setAttribute("aria-describedby", "map-description");') == 1
+        assert mode.count('for (const layer of svg.children) layer.setAttribute("aria-hidden", "true");') == 1
+        assert mode.count("paragraph.textContent") == 1
     seam = page[page.index("window.__present = {"):page.index("__PRESENT__")]
     assert "describeMap" not in seam and "map-description" not in seam
     # The page's data did not grow to carry it: the keys an unnamed, unordered map writes.
