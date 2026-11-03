@@ -24,8 +24,15 @@ def main():
         picker = page.locator("#mj-moment-picker")
         picker.wait_for(timeout=12000)
         assert picker.locator("option").count() == 68, "67 moments plus placeholder"
-        assert page.locator("#view-map").is_visible()
         assert not page.locator("#view-linear").is_visible()
+        assert not page.locator("header .back").is_visible()
+        assert page.locator("#line-count").inner_text() == "7 of 7"
+        category_chips = page.locator("#line-toggles .chip")
+        assert category_chips.count() == 7
+        category_chips.first.click()
+        assert page.locator("#line-count").inner_text() == "6 of 7"
+        category_chips.first.click()
+        assert page.locator("#line-count").inner_text() == "7 of 7"
         description = page.locator("#map-description").inner_text()
         assert "67 unique moments" in description
         assert "not directed research connections" in description
