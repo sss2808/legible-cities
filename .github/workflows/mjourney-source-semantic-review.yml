@@ -78,6 +78,8 @@ jobs:
             out/system-browser.audit.json
             out/system-browser.research.json
             out/semantic-review-baseline-950.png
+            out/semantic-review-branches-950.png
+            out/semantic-review-branches-1440.png
             out/semantic-review-handoffs-950.png
             out/semantic-review-return-950.png
             out/semantic-review-handoffs-1440.png
