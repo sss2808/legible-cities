@@ -10,6 +10,7 @@ on:
       - "src/schematic/mjourney.py"
       - "tests/test_mjourney_category_corridors.py"
       - "tests/browser/test_mjourney_category_browser.py"
+      - "docs/MJOURNEY_STAGE_DEMAND_CATEGORY_CORRIDORS.md"
       - "src/schematic/page/mjourney_inspector.js"
       - "src/schematic/page/mjourney_scene.js"
       - "src/schematic/page/mjourney_corridor_router.js"
@@ -139,6 +140,8 @@ jobs:
             out/system-stage-demand.audit.json
             out/system-stage-demand.research.json
             out/system-demand-overview-950.png
+            out/system-demand-baseline-selected-950.png
+            out/system-demand-baseline-selected-1440.png
             out/system-demand-focus-950.png
             out/system-demand-focus-1440.png
             out/system-demand-metrics.json
