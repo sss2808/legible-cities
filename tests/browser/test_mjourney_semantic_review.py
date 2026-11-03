@@ -40,7 +40,7 @@ def main():
         assert page.locator("#stations [data-station-id]").count() == 67
         assert page.locator("#lines path[data-src][data-dst]").count() == 60
         assert page.locator("#mj-semantic-review-edges *").count() == 0
-        assert page.locator("#mj-semantic-review-select").input_value() == ""
+        assert page.locator("#mj-focus-select").input_value() == ""
         page.screenshot(path=str(OUT / "semantic-review-baseline-950.png"),
                         full_page=True)
 
@@ -52,9 +52,9 @@ def main():
 
         # Opt-in source-typed handoffs. They never become transport transfers,
         # and selecting them switches OFF the prior vendor-selection focus.
-        review = page.locator("#mj-semantic-review-select")
-        review.select_option("handoffs")
-        assert existing.input_value() == ""
+        review = existing
+        review.select_option("review:handoffs")
+        assert existing.input_value() == "review:handoffs"
         assert page.locator("#mj-source-relationships path").count() == 0
         assert page.locator("#mj-source-junctions circle").count() == 0
         paths = page.locator("#mj-semantic-review-edges path")
@@ -94,14 +94,14 @@ def main():
                    and item["startError"] < .06
                    and item["endError"] < .06 for item in audit), audit
         assert "not approved transit interchanges" in page.locator(
-            "#mj-semantic-review-status").inner_text()
+            "#mj-semantic-review-status").text_content()
         assert page.locator('#mj-semantic-review-edges [data-interchange]').count() == 0
         page.screenshot(path=str(OUT / "semantic-review-handoffs-950.png"),
                         full_page=True)
 
         # Lifecycle recurrence is represented by its REAL endpoints only.
         # Do not draw a giant fabricated rail across ten stage domains.
-        review.select_option("returns")
+        review.select_option("review:returns")
         assert paths.count() == 0
         rings = page.locator("#mj-semantic-review-edges circle")
         assert rings.count() == 2
@@ -114,7 +114,7 @@ def main():
             {"edge": "edge87", "station": "eq01", "role": "target"},
         ], source
         assert "not a transit route" in page.locator(
-            "#mj-semantic-review-status").inner_text()
+            "#mj-semantic-review-status").text_content()
         page.locator("#mj-moment-picker").select_option("eq67")
         assert "edge87" in page.locator("#mj-inspector").inner_text()
         page.screenshot(path=str(OUT / "semantic-review-return-950.png"),
@@ -122,14 +122,14 @@ def main():
 
         # A native focus choice restores ordinary relationship display.
         existing.select_option("ae")
-        assert review.input_value() == ""
+        assert page.evaluate("window.__mjourneySemanticReview.state()") == ""
         assert rings.count() == 0
         assert page.locator("#mj-source-relationships path").count() == 4
         existing.select_option("")
         assert page.locator("#mj-source-relationships path").count() == 0
 
         page.set_viewport_size({"width": 1440, "height": 900})
-        review.select_option("handoffs")
+        review.select_option("review:handoffs")
         page.screenshot(path=str(OUT / "semantic-review-handoffs-1440.png"),
                         full_page=True)
         frame = page.evaluate("""() => ({
