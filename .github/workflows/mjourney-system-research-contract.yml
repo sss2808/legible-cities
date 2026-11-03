@@ -8,6 +8,8 @@ on:
       - "src/schematic/mjourney_research_contract.py"
       - "src/schematic/page/mjourney_inspector.js"
       - "src/schematic/page/mjourney_scene.js"
+      - "src/schematic/page/mjourney_corridor_router.js"
+      - "tests/test_mjourney_corridor_router.cjs"
       - "src/schematic/page/mjourney_labels.js"
       - "tests/browser/test_mjourney_browser.py"
       - "src/schematic/page/page.html"
@@ -32,6 +34,10 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Run original adapter and new source contract tests
         run: python -m pytest -q tests/test_mjourney.py tests/test_mjourney_research_contract.py
+      - name: Unit-test deterministic native SVG corridor candidates
+        run: |
+          node --check src/schematic/page/mjourney_corridor_router.js
+          node tests/test_mjourney_corridor_router.cjs
       - name: Frozen equipment source must match P0a original byte certificate
         run: |
           python - <<'PY'
@@ -122,6 +128,8 @@ jobs:
             out/system-more-labels-950.png
             out/system-focus-950.png
             out/system-junctions-950.png
+            out/system-corridors-950.png
+            out/system-corridors-1440.png
             out/system-junctions-1440.png
             out/system-focus-1440.png
             out/system-stage-950.png
