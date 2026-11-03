@@ -118,6 +118,8 @@
     const m = moments.get(id);
     if (!m) return;
     selector.value = id;
+    window.dispatchEvent(new CustomEvent("mjourney:selection",
+      {detail: {momentId: id}}));
     heading.textContent = m.label;
     content.replaceChildren();
     content.appendChild(elem("p", "", "Stage: " + (stages.get(m.stageId) || m.stageId)));

@@ -58,6 +58,31 @@ def main():
         assert frame["width"] <= 951
         assert frame["height"] <= frame["viewportHeight"] + 1, frame
         assert frame["stageHeight"] >= 200
+        # Key labels are readable HTML callouts bound to the exact same source
+        # station coordinates. Visible label rectangles must not overlap.
+        page.wait_for_function("window.__mjourneyLabels && window.__mjourneyLabels.visibleIds().length >= 5")
+        labels = page.locator("#mj-readable-labels .mj-readable-label")
+        key_count = labels.count()
+        assert 5 <= key_count <= 14, key_count
+        assert page.locator("#mj-label-controls button[aria-pressed='true']").inner_text() == "Key labels"
+        boxes = labels.evaluate_all("""items => items.map(el => {
+          const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+          return {id: el.dataset.momentId, l:r.left, t:r.top, r:r.right, b:r.bottom,
+                  size: parseFloat(s.fontSize)};
+        })""")
+        assert all(b["size"] >= 11 for b in boxes)
+        for i, one in enumerate(boxes):
+            for two in boxes[i + 1:]:
+                assert not (one["l"] < two["r"] + 3 and one["r"] + 3 > two["l"]
+                            and one["t"] < two["b"] + 3 and one["b"] + 3 > two["t"]), (one, two)
+        page.screenshot(path=str(OUT / "system-key-labels-950.png"), full_page=True)
+        page.get_by_role("button", name="More labels").click()
+        page.wait_for_function("window.__mjourneyLabels.currentDensity() === 'more'")
+        page.wait_for_function("document.querySelector('#mj-readable-labels').dataset.visibleCount !== null")
+        assert labels.count() >= key_count
+        page.screenshot(path=str(OUT / "system-more-labels-950.png"), full_page=True)
+        page.get_by_role("button", name="Key labels").click()
+        page.wait_for_function("window.__mjourneyLabels.currentDensity() === 'key'")
         page.screenshot(path=str(OUT / "system-overview-950.png"), full_page=True)
         focus_select.select_option("ae")
         assert page.locator("#mj-source-relationships path").count() == 4
@@ -67,6 +92,8 @@ def main():
         focus_select.select_option("direct")
         assert page.locator("#mj-source-relationships path").count() == 3
         focus_select.select_option("all")
+        page.wait_for_function("window.__mjourneyLabels.visibleIds().includes('eq31')")
+        assert page.locator('#mj-readable-labels [data-moment-id="eq31"]').count() == 1
         highlighted_ids = page.locator("#mj-source-relationships path").evaluate_all(
             "(xs) => xs.map(x => x.dataset.sourceEdgeId)")
         assert len(highlighted_ids) == len(set(highlighted_ids)) == 7
