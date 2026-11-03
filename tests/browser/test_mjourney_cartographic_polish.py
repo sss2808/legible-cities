@@ -1,0 +1,170 @@
+"""W382 fork-only Chromium visual gate for the original native Legible Cities renderer.
+
+Before running, generate out/system-browser.html with --system-v3,
+--stage-demand-corridors, --html and the two authored focus-path arguments.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+OUT = Path(__file__).resolve().parents[2] / "out"
+PAGE = OUT / "system-browser.html"
+
+
+def main() -> None:
+    from playwright.sync_api import sync_playwright
+
+    assert PAGE.is_file(), "Generate out/system-browser.html first"
+    errors: list[str] = []
+    records: dict[str, object] = {}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 950, "height": 520},
+                                device_scale_factor=1)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(PAGE.as_uri(), wait_until="load")
+        page.wait_for_function("!!window.__mjourneyCartography")
+        source = json.loads((OUT / "system-browser.research.json").read_text(
+            encoding="utf-8"))
+        assert len(source["canonical"]["moments"]) == 67
+        assert len(source["canonical"]["relationships"]) == 87
+        assert len(source["canonical"]["categories"]) == 7
+        assert len(source["presentation"]["categoryGuides"]) == 60
+        expected = [edge for f in source["focusSequences"]
+                    for edge in f["sourceEdgeIds"]]
+        assert len(expected) == 7
+        assert set(expected) == {"edge44", "edge45", "edge48", "edge49",
+                                 "edge50", "edge51", "edge52"}
+
+        for width, height in [(950, 520), (1440, 900)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.wait_for_function(
+                "() => window.__mjourneyCartography.markerCount() === 67")
+            page.wait_for_timeout(250)
+            result = page.evaluate("""() => {
+              const cart = window.__mjourneyCartography;
+              const source = window.__mjourneyResearchViewer;
+              const stage = document.querySelector('#stage').getBoundingClientRect();
+              const original = [...document.querySelectorAll('#stations [data-station-id]')]
+                .map(el => el.dataset.stationId);
+              const marks = [...document.querySelectorAll(
+                '#mj-cartographic-markers [data-source-moment-ref]')]
+                .map(el => el.dataset.sourceMomentRef);
+              const links = [...document.querySelectorAll(
+                '#mj-cartographic-source-branch path[data-source-edge-id]')]
+                .map(el => ({id:el.dataset.sourceEdgeId,from:el.dataset.sourceFrom,
+                             to:el.dataset.sourceTo,notTransfer:
+                               el.dataset.researchLinkNotTransfer === 'true'}));
+              const headings = [...document.querySelectorAll(
+                '#mj-stage-strip .mj-stage-name')].map(el => ({
+                  id:el.dataset.stageId,
+                  name:el.dataset.visibleStage,
+                  original:el.textContent,
+                  width:el.getBoundingClientRect().width
+                }));
+              const box = el => {
+                const r = el.getBoundingClientRect();
+                return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+              };
+              const tags = [...document.querySelectorAll(
+                '#mj-cartography-terminus-labels .mj-cartography-tag')].map(box);
+              const labels = [...document.querySelectorAll(
+                '#mj-readable-labels .mj-readable-label')].map(box);
+              return {sourceMomentCount:source.moments.size,
+                authoredRelations:source.relationships.length,
+                categories:source.data.canonical.categories.length,
+                stationIds:original, markerIds:marks,
+                guideCount:cart.categoryGuideCount(),
+                links, headings, tags, labels,
+                visibleLabelCount:labels.length,
+                branchVisible:getComputedStyle(document.querySelector(
+                  '#mj-cartographic-source-branch')).display !== 'none',
+                inspectorHidden:document.querySelector('#mj-inspector').hidden,
+                docWidth:document.documentElement.scrollWidth,
+                docHeight:document.documentElement.scrollHeight,
+                stageWidth:stage.width, stageHeight:stage.height};
+            }""")
+            assert result["sourceMomentCount"] == 67, result
+            assert result["authoredRelations"] == 87, result
+            assert result["categories"] == 7, result
+            assert result["guideCount"] == 60, result
+            assert result["stationIds"] == result["markerIds"], result
+            assert len(set(result["stationIds"])) == 67, result
+            assert sorted(item["id"] for item in result["links"]) == sorted(expected)
+            assert all(item["notTransfer"] for item in result["links"])
+            assert all(any(r["id"] == edge["id"] and
+                           r["fromId"] == edge["from"] and
+                           r["toId"] == edge["to"] for r in
+                           source["canonical"]["relationships"]) for edge in
+                           result["links"])
+            assert result["branchVisible"]
+            assert result["inspectorHidden"]
+            assert result["docWidth"] <= width + 1, result
+            assert result["docHeight"] <= height + 1, result
+            assert len(result["headings"]) == 10
+            assert [h["name"] for h in result["headings"]] == [
+                s["name"] for s in source["canonical"]["stages"]]
+            assert all(h["width"] >= 38 for h in result["headings"]), result
+            assert result["visibleLabelCount"] >= (10 if width < 1100 else 18)
+            # The measured label engine owns the main label collision rule.
+            for i, a in enumerate(result["labels"]):
+                for b in result["labels"][i + 1:]:
+                    assert not (a["left"] < b["right"] + 3 and
+                                a["right"] + 3 > b["left"] and
+                                a["top"] < b["bottom"] + 3 and
+                                a["bottom"] + 3 > b["top"]), (a, b)
+            for tag in result["tags"]:
+                for label in result["labels"]:
+                    assert not (tag["left"] < label["right"] + 4 and
+                                tag["right"] + 4 > label["left"] and
+                                tag["top"] < label["bottom"] + 4 and
+                                tag["bottom"] + 4 > label["top"]), (tag, label)
+            # Existing compact DOM remains numbered for legacy navigation
+            # tests and accessible names; CSS renders actual source names.
+            if width == 950:
+                assert result["headings"][0]["original"] == "01", result
+            else:
+                assert result["headings"][0]["original"] == "Business need"
+            page.screenshot(path=str(OUT / f"cartography-w382-{width}.png"),
+                            full_page=True)
+            records[f"{width}x{height}"] = {
+                "momentCount": 67, "relationshipCount": 87,
+                "guideCount": 60, "layerCount": 7,
+                "sourceOverlayEdges": expected,
+                "visibleMomentLabels": result["visibleLabelCount"],
+                "guideTerminusLabels": len(result["tags"]),
+                "sourceStageNames": [h["name"] for h in result["headings"]],
+                "noOverlap": True, "noViewportOverflow": True,
+            }
+
+        # Viewer remains fully interactive and the same research path never
+        # appears twice when a focused or review-only overlay is selected.
+        focus = page.locator("#mj-focus-select")
+        focus.select_option("all")
+        assert not page.locator("#mj-cartographic-source-branch").is_visible()
+        assert page.locator("#mj-source-relationships path").count() == 7
+        page.screenshot(path=str(OUT / "cartography-w382-fork-1440.png"),
+                        full_page=True)
+        focus.select_option("review:handoffs")
+        assert not page.locator("#mj-cartographic-source-branch").is_visible()
+        assert page.locator("#mj-semantic-review-edges path").count() == 3
+        focus.select_option("")
+        assert page.locator("#mj-cartographic-source-branch").is_visible()
+        page.locator("#mj-moment-picker").select_option("eq31")
+        assert page.locator("#mj-inspector-heading").inner_text() == (
+            "Funding authorized")
+        assert page.locator("#mj-inspector").is_visible()
+        page.keyboard.press("Escape")
+        assert page.locator("#mj-inspector").is_hidden()
+        assert page.locator("#line-toggles .chip").count() == 7
+        assert not errors, errors
+        browser.close()
+
+    (OUT / "cartography-w382-metrics.json").write_text(
+        json.dumps(records, indent=2) + "\n", encoding="utf-8")
+    print("W382 static cartography Chromium PASS", json.dumps(records))
+
+
+if __name__ == "__main__":
+    main()
