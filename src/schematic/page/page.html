@@ -577,6 +577,9 @@ __SOCIAL__
 <script>
 (() => {
   const data = JSON.parse(document.getElementById("data").textContent);
+  // M-Journey category tracks are visual organization, not public transit.
+  // Ordinary Legible Cities pages do not carry this flag and stay unchanged.
+  const isMJourney = document.documentElement.hasAttribute("data-mjourney");
   // What the page writes for a line: its name where the map gave it one,
   // else its label. The label stays the key everywhere it is matched on.
   const display = r =>
@@ -770,6 +773,23 @@ __SOCIAL__
   // hidden. It goes after the SVG inside #stage and is sr-only, out of the flow,
   // so the stage lays the SVG out exactly as before and no frame moves.
   function describeMap() {
+    if (isMJourney) {
+      const paragraph = document.createElement("p");
+      paragraph.id = "map-description";
+      paragraph.className = "sr-only";
+      paragraph.textContent = "Research journey schematic with "
+        + mapXY.size + " unique moments and " + layout.lines.length
+        + " category groups. Colored guides show grouping membership, not"
+        + " directed research connections or customer travel. Use the research"
+        + " moment selector to inspect documented source relationships."
+        + " Shared colors or crossing lines do not establish an interchange.";
+      svg.after(paragraph);
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", "M-Journey System research schematic");
+      svg.setAttribute("aria-describedby", "map-description");
+      for (const layer of svg.children) layer.setAttribute("aria-hidden", "true");
+      return;
+    }
     const stationName = layout.names || {};
     // A node the map draws no dot for is a junction LOOM inserted, not a station.
     const named = n => mapXY.has(n) && stationName[n];
@@ -2163,6 +2183,9 @@ __SOCIAL__
   // node -> [{ line, to }], one entry a line and neighbour, by label then node.
   const runsAt = new Map();
   {
+    // Only real railway pages derive passenger adjacency from drawn tracks.
+    // M-Journey owns a separate canonical directed research graph.
+    if (!isMJourney) {
     const found = new Map();
     for (const t of tracks) {
       if (t.src === t.dst) continue;
@@ -2173,6 +2196,7 @@ __SOCIAL__
     }
     for (const [node, runs] of found) {
       runsAt.set(node, [...runs.values()].sort((x, y) => byUnits(x.line, y.line) || byUnits(x.to, y.to)));
+    }
     }
   }
   const aheadOn = (line, node) => (runsAt.get(node) || []).filter(r => r.line === line).map(r => r.to);
@@ -2472,7 +2496,7 @@ __SOCIAL__
   // their own after the stage: inside the stage the cursor would stop the
   // browser making the stage a Tab stop, and inside the image it would be a
   // control in a picture.
-  if (!present) buildPicking();
+  if (!present && !isMJourney) buildPicking();
   function buildPicking() {
     const nameOf = n => (layout.names || {})[n] || n;
     const dotsOf = new Map();
@@ -2984,11 +3008,14 @@ __SOCIAL__
     // setView and setGeo are the two axes, unchanged and independent:
     // bin/_record.js raises geo and *then* names a view, so a setView that
     // lowered geo by itself would break every geographic export.
-    setView(v, dur) { setMode(v, dur); },
+    setView(v, dur) { if (!isMJourney || v === "map") setMode(v, dur); },
     setGeo(on, dur) { return setGeo(on, dur); },
     // Both axes at once, by the public name of the view. This is what the
     // site's switcher drives, and what the page's own buttons go through.
-    showView(name, dur) { showView(name, dur); },
+    showView(name, dur) {
+      if (!isMJourney || name === "map" || name === "schematic")
+        showView(name, dur);
+    },
     hasGeo() { return !!geoData; },
     setLabels(on) { setLabels(on); },
     setRoutes(keep) {
@@ -3068,7 +3095,7 @@ __SOCIAL__
     // name off it is hidden, unless an exporter is driving the page. Answers
     // what state().trip then says: the legs, or `legs: null` and a reason,
     // with the map left whole. setTrip(null) shows the whole network again.
-    setTrip(from, to) { return setTrip(from, to); },
+    setTrip(from, to) { return isMJourney ? null : setTrip(from, to); },
     // The title card over the frame, or none: the city, the network, the
     // service day and the caption the address carries, on a scrim of the
     // ground. It cuts in and out, and draws, so the count in state().draws
