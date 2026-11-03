@@ -145,3 +145,45 @@ def test_cli_writes_research_contract_sidecar_with_native_svg(equipment, tmp_pat
     assert audit["researchContract"]["categoryGuidesNavigable"] is False
     assert audit["render"]["researchNavigationImplemented"] is False
     assert out.exists()
+
+
+
+def test_system_html_contains_canonical_inspector_and_not_a_passenger_trip_picker(tmp_path):
+    out = tmp_path / "equipment.svg"
+    proc = subprocess.run([
+        sys.executable, str(ROOT / "bin/mjourney-preview"), "--system-v3",
+        "--source", str(EQUIPMENT), "--html", "--output", str(out),
+    ], capture_output=True, text=True, timeout=90)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    html = out.with_suffix(".html").read_text(encoding="utf-8")
+    assert 'id="mjourney-research"' in html
+    assert 'data-mjourney-inspector' in html
+    assert "mj-moment-picker" in html
+    assert "Incoming authored relationships" in html
+    assert 'e.stopImmediatePropagation()' not in (ROOT / "bin/mjourney-preview").read_text()
+    assert 'data-mjourney' in html
+    assert 'if (!present && !isMJourney) buildPicking();' in html
+    assert "Only real railway pages derive passenger adjacency" in html
+    assert "Trains move along the lines" in html  # native fallback retained for rail maps
+    audit = json.loads(out.with_suffix(".audit.json").read_text())
+    assert audit["render"]["researchNavigationImplemented"] is True
+    assert audit["render"]["internalTransitNetworkBuiltByUpstream"] is False
+    assert audit["render"]["viewerModes"] == ["system"]
+    import re
+    embedded = re.search(
+        r'<script id="mjourney-research" type="application/json">(.*?)</script>',
+        html, re.S,
+    )
+    assert embedded
+    contract = json.loads(embedded.group(1))
+    assert len(contract["canonical"]["moments"]) == 67
+    assert len(contract["canonical"]["relationships"]) == 87
+
+
+def test_native_railway_viewer_keeps_original_trip_picker_separate():
+    page = (ROOT / "src/schematic/page/page.html").read_text()
+    assert 'if (!present && !isMJourney) buildPicking();' in page
+    assert 'if (!isMJourney) {' in page
+    assert 'return isMJourney ? null : setTrip(from, to);' in page
+    assert 'Research journey schematic with ' in page
+    assert "Trains move along the lines as the clock runs" in page
