@@ -65,6 +65,12 @@
     };
     if (selected) add(selected);
     const active = focusPicker ? focusPicker.value : "";
+    // The source-authored fork and reunion matter even before any explicit
+    // focus is selected. This is label priority, never a new research edge.
+    if (!active) for (const path of data.focusSequences || []) {
+      add(path.momentIds[0]);
+      add(path.momentIds[path.momentIds.length - 1]);
+    }
     const activePaths = data.focusSequences.filter(f =>
       f.id === active || active === "all");
     // Mark the source-backed branch and shared outcome before filling the rest.
@@ -116,8 +122,8 @@
     // portfolio projection, using their canonical source labels.
     if (nativeLabels) nativeLabels.setAttribute("aria-hidden", "true");
     const maxVisible = Math.min(
-      mode === "key" ? 14 : 23,
-      Math.max(5, Math.floor(frame.width / (mode === "key" ? 60 : 42)))
+      mode === "key" ? (frame.width < 1100 ? 14 : 26) : (frame.width < 1100 ? 23 : 42),
+      Math.max(5, Math.floor(frame.width / (mode === "key" ? 56 : 40)))
     );
     const occupied = [];
     const stripBox = stageStrip.getBoundingClientRect();
