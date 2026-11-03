@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import Any
 
 from .linegraph import Edge, Line, LineGraph, Node
+from .mjourney_category_corridors import (
+    choose_centered_guide, guide_metrics, spacing_by_stage,
+)
 
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 _TRAVERSABLE_KINDS = {"sequence", "branch", "convergence", "handoff"}
@@ -409,7 +412,7 @@ def build_network_projection(data: dict, *, full: bool = False) -> JourneyProjec
     )
 
 
-def build_system_v3(data: dict) -> JourneyProjection:
+def build_system_v3(data: dict, *, stage_demand_corridors: bool = False) -> JourneyProjection:
     """Native Legible Cities System map with continuous *category* lines.
 
     This projection deliberately does NOT use source relationships as colored
@@ -440,16 +443,24 @@ def build_system_v3(data: dict) -> JourneyProjection:
     # presentation geometry, not measured data or inferred relationships.
     # The waves are deterministic and preserve the seven line identities.
     import math
-    center = (len(ordered_layers) - 1) / 2
-    category_y = {}
-    for li, layer in enumerate(ordered_layers):
-        for si, stage in enumerate(ordered_stages):
-            drift = 42 * math.sin(si * .72 + li * .56)
-            # Stations may visually cluster into corridors around procurement.
-            pull = (13 if si in (4, 5, 6) else 0) * (center - li)
-            category_y[(layer["id"], stage["id"])] = (
-                150 + li * 104 + drift + pull
-            )
+    stage_demand = []
+    if stage_demand_corridors:
+        # Use authored cross-category relationship density to allocate
+        # corridor clearance; these relationship records remain separate from
+        # the non-traversable category guides and do not create interchanges.
+        category_y, stage_demand = spacing_by_stage(
+            moments, connections, ordered_stages, ordered_layers)
+    else:
+        # Keep the legacy V3 coordinates intact for A/B comparison.
+        center = (len(ordered_layers) - 1) / 2
+        category_y = {}
+        for li, layer in enumerate(ordered_layers):
+            for si, stage in enumerate(ordered_stages):
+                drift = 42 * math.sin(si * .72 + li * .56)
+                pull = (13 if si in (4, 5, 6) else 0) * (center - li)
+                category_y[(layer["id"], stage["id"])] = (
+                    150 + li * 104 + drift + pull
+                )
 
     # All 67 authored moments retain their stage, identity, and one sourced
     # layer membership. The slot allocation avoids coincident moment markers.
@@ -490,6 +501,7 @@ def build_system_v3(data: dict) -> JourneyProjection:
     ]
     edges = []
     guide_audit = []
+    corridor_guides = []
     source_pairs: dict[tuple[str, str], list[str]] = {}
     for e in connections.values():
         source_pairs.setdefault((e["fromId"], e["toId"]), []).append(e["id"])
@@ -502,7 +514,17 @@ def build_system_v3(data: dict) -> JourneyProjection:
             # A colored line is an organizational membership guide only.
             # It NEVER automatically becomes a verified traversable route.
             relationship_ids = source_pairs.get((prev, nxt), [])
-            geom = _octilinear(positions[prev], positions[nxt])
+            geom = (
+                choose_centered_guide(
+                    positions[prev], positions[nxt], src=prev, dst=nxt,
+                    positions=positions, previously_routed=corridor_guides,
+                    layer_id=line.id)
+                if stage_demand_corridors else
+                _octilinear(positions[prev], positions[nxt])
+            )
+            corridor_guides.append({
+                "src": prev, "dst": nxt, "layerId": line.id, "points": geom,
+            })
             edges.append(Edge(
                 src=prev, dst=nxt, geometry=geom, lines=[line],
                 props={
@@ -518,6 +540,15 @@ def build_system_v3(data: dict) -> JourneyProjection:
             })
 
     graph = LineGraph(nodes=nodes, edges=edges)
+    corridor_report = (guide_metrics(positions, corridor_guides)
+                       if stage_demand_corridors else None)
+    if corridor_report and (
+        corridor_report["nonincidentStationClearanceViolationsUnder30"]
+        or corridor_report["crossCategoryGuideIntersections"]
+    ):
+        raise ProjectionError(
+            "stage-demand corridors violate station clearance or category "
+            "separation: " + str(corridor_report))
     path_branches: dict[str, list[str]] = {}
     for e in connections.values():
         if e["routeId"] not in ("all", None, ""):
@@ -567,6 +598,13 @@ def build_system_v3(data: dict) -> JourneyProjection:
                 ],
                 "positionsDeterministic": True,
                 "stageDistanceMeansElapsedTime": False,
+                "categoryCorridorMode": ("stage-demand" if stage_demand_corridors
+                                         else "legacy-v3"),
+                "categoryCorridorSource": (
+                    "authored cross-category relationship density; not travel"
+                    if stage_demand_corridors else "legacy presentation waves"),
+                "categoryCorridorStageDemand": stage_demand,
+                "categoryCorridorMetrics": corridor_report,
             },
             "guides": guide_audit,
         },
