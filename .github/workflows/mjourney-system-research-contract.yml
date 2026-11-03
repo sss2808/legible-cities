@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - "src/schematic/mjourney_research_contract.py"
+      - "src/schematic/page/mjourney_inspector.js"
+      - "src/schematic/page/page.html"
       - "tests/test_mjourney_research_contract.py"
       - "bin/mjourney-preview"
       - "fixtures/mjourney/**"
