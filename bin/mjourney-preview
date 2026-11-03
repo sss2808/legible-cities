@@ -120,6 +120,47 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     :root[data-mjourney] .mj-focus-tools { flex-wrap: wrap; }
     :root[data-mjourney] header .sub { display: none; }
   }
+
+  /* Native tiny 1850-unit SVG names are replaced by clear pixel-scale
+     research labels. Underlying marker coordinates and topology never move. */
+  :root[data-mjourney-inspector] #linear-labels text { visibility: hidden !important; }
+  :root[data-mjourney-inspector] #mj-readable-labels {
+    position: absolute; inset: 0; overflow: hidden;
+    pointer-events: none; z-index: 4;
+  }
+  :root[data-mjourney-inspector] .mj-readable-label {
+    position: absolute; display: inline-block;
+    width: max-content; max-width: 112px;
+    font-size: clamp(11px, .86vw, 12.8px);
+    font-weight: 650; line-height: 1.13;
+    color: var(--text);
+    white-space: normal; overflow-wrap: break-word;
+    text-shadow: 0 1px var(--bg), 1px 0 var(--bg),
+                 0 -1px var(--bg), -1px 0 var(--bg),
+                 0 2px 3px var(--bg);
+    text-align: center;
+  }
+  :root[data-mjourney-inspector] .mj-selected-label {
+    font-weight: 800; text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  :root[data-mjourney-inspector] #mj-label-controls {
+    display: inline-flex; gap: 0; border: 1px solid var(--border);
+    border-radius: 6px; overflow: hidden; white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  :root[data-mjourney-inspector] #mj-label-controls button {
+    padding: .23rem .45rem; font-size: .76rem; border: 0;
+  }
+  :root[data-mjourney-inspector] #mj-label-controls button + button {
+    border-left: 1px solid var(--border);
+  }
+  :root[data-mjourney-inspector] #mj-label-controls button[aria-pressed="true"] {
+    background: var(--text); color: var(--bg);
+  }
+  @media (max-width: 1080px) {
+    :root[data-mjourney-inspector] .mj-readable-label { font-size: 11.5px; }
+  }
   :root[data-mjourney] .mj-inspector[hidden] { display: none !important; }
   :root[data-mjourney] .mj-inspector {
     position: fixed; right: 1rem; bottom: 1rem; z-index: 40;
@@ -151,11 +192,14 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             encoding="utf-8")
         scene = (ROOT / "src/schematic/page/mjourney_scene.js").read_text(
             encoding="utf-8")
+        label_hierarchy = (ROOT / "src/schematic/page/mjourney_labels.js").read_text(
+            encoding="utf-8")
         page = page.replace(
             "</html>",
             '<script id="mjourney-research" type="application/json">'
             + payload + '</script>\n<script>\n' + inspector
             + '\n</script>\n<script>\n' + scene
+            + '\n</script>\n<script>\n' + label_hierarchy
             + '\n</script>\n</html>', 1)
     return page
 
