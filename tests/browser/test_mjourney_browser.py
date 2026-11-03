@@ -33,6 +33,37 @@ def main():
         assert page.locator("#line-count").inner_text() == "6 of 7"
         category_chips.first.click()
         assert page.locator("#line-count").inner_text() == "7 of 7"
+        # The System scene has ten original stage headings aligned to the
+        # native station geometry, without any elapsed-month presentation.
+        headings = page.locator("#mj-stage-strip .mj-stage-name")
+        assert headings.count() == 10
+        stage_boxes = headings.evaluate_all(
+            "(nodes) => nodes.map(n => ({id: n.dataset.stageId, x: n.getBoundingClientRect().x, w: n.getBoundingClientRect().width}))")
+        assert len(set(item["id"] for item in stage_boxes)) == 10
+        assert [item["x"] for item in stage_boxes] == sorted(
+            item["x"] for item in stage_boxes)
+        assert all(item["w"] >= 38 for item in stage_boxes)
+        assert "Stage 1:" in headings.first.get_attribute("aria-label")
+        assert not any("Month" in (n.inner_text()) for n in headings.all())
+        # Optional focus edges must all exist in the canonical directed graph.
+        focus_select = page.locator("#mj-focus-select")
+        assert focus_select.locator("option").count() == 4
+        assert page.locator("#mj-source-relationships path").count() == 0
+        page.screenshot(path=str(OUT / "system-overview-950.png"), full_page=True)
+        focus_select.select_option("ae")
+        assert page.locator("#mj-source-relationships path").count() == 4
+        assert set(page.locator("#mj-source-relationships path").evaluate_all(
+            "(xs) => xs.map(x => x.dataset.sourceEdgeId)")) == {
+                "edge44", "edge48", "edge49", "edge50"}
+        focus_select.select_option("direct")
+        assert page.locator("#mj-source-relationships path").count() == 3
+        focus_select.select_option("all")
+        highlighted_ids = page.locator("#mj-source-relationships path").evaluate_all(
+            "(xs) => xs.map(x => x.dataset.sourceEdgeId)")
+        assert len(highlighted_ids) == len(set(highlighted_ids)) == 7
+        assert "edge45" in highlighted_ids and "edge52" in highlighted_ids
+        page.screenshot(path=str(OUT / "system-focus-950.png"), full_page=True)
+
         description = page.locator("#map-description").inner_text()
         assert "67 unique moments" in description
         assert "not directed research connections" in description
@@ -72,6 +103,9 @@ def main():
 
         # Same generated research source, larger viewport and native Fit.
         page.set_viewport_size({"width": 1440, "height": 900})
+        assert page.locator("#mj-stage-strip .mj-stage-name").count() == 10
+        assert page.locator("#mj-source-relationships path").count() == 7
+        page.screenshot(path=str(OUT / "system-focus-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-research-1440.png"), full_page=True)
         assert not issues, "Browser page errors: " + "; ".join(issues)
         browser.close()
