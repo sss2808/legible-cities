@@ -122,5 +122,7 @@ jobs:
             out/system-more-labels-950.png
             out/system-focus-950.png
             out/system-focus-1440.png
+            out/system-stage-950.png
+            out/system-stage-1440.png
             out/system-research-1440.png
           retention-days: 30

@@ -6,7 +6,6 @@ All assertions target sanitized public data, no private Dovetail calls.
 from __future__ import annotations
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 VIEWER = ROOT / "out/system-browser.html"
@@ -14,6 +13,7 @@ OUT = ROOT / "out"
 
 
 def main():
+    from playwright.sync_api import sync_playwright  # browser CI only; pytest collection needs no browser
     assert VIEWER.is_file(), "Generate out/system-browser.html first"
     issues = []
     with sync_playwright() as playwright:
@@ -45,6 +45,41 @@ def main():
         assert all(item["w"] >= 38 for item in stage_boxes)
         assert "Stage 1:" in headings.first.get_attribute("aria-label")
         assert not any("Month" in (n.inner_text()) for n in headings.all())
+        # Small viewports show ordinal headers, while the full source-backed
+        # stage names remain in the selector, title and accessible labels.
+        page.wait_for_function("""() => document.querySelector('#mj-stage-strip .mj-stage-name').textContent === '01'""")
+        stage_select = page.locator("#mj-stage-picker")
+        assert stage_select.locator("option").count() == 11
+        assert "Authorization" in stage_select.locator('option[value="stage-4"]').inner_text()
+        before_moments = page.evaluate("""() => [...window.__mjourneyResearchViewer.positions].map(([id, xy]) => [id, xy.x, xy.y])""")
+        stage_select.select_option("stage-4")
+        assert page.locator('.mj-stage-name[data-stage-id="stage-4"]').get_attribute("class").find("mj-stage-active") >= 0
+        assert page.locator("#mj-stage-focus rect").evaluate("(e) => e.style.display !== 'none'")
+        # A source projection's pre-render x bounds are not native SVG x
+        # coordinates. The highlighted rectangle must contain exactly the
+        # selected stage's actual rendered stations, not a later stage.
+        stage_bounds = page.evaluate("""() => {
+          const model = window.__mjourneyResearchViewer, id = 'stage-4';
+          const xs = stageId => model.data.canonical.moments
+            .filter(m => m.stageId === stageId).map(m => model.positions.get(m.id).x);
+          const selected = xs(id), next = xs('stage-5');
+          const rect = document.querySelector('#mj-stage-focus rect');
+          const x = Number(rect.getAttribute('x'));
+          const right = x + Number(rect.getAttribute('width'));
+          return {x, right, min: Math.min(...selected), max: Math.max(...selected),
+                  nextMin: Math.min(...next)};
+        }""")
+        assert stage_bounds["x"] <= stage_bounds["min"], stage_bounds
+        assert stage_bounds["right"] >= stage_bounds["max"], stage_bounds
+        assert stage_bounds["right"] < stage_bounds["nextMin"], stage_bounds
+        page.wait_for_function("window.__mjourneyLabels.currentStageId() === 'stage-4'")
+        page.wait_for_function("window.__mjourneyLabels.visibleIds().includes('eq31')")
+        after_moments = page.evaluate("""() => [...window.__mjourneyResearchViewer.positions].map(([id, xy]) => [id, xy.x, xy.y])""")
+        assert after_moments == before_moments, "stage attention cannot move a canonical moment"
+        page.screenshot(path=str(OUT / "system-stage-950.png"), full_page=True)
+        stage_select.select_option("")
+        assert not page.locator("#mj-stage-focus rect").evaluate("(e) => e.style.display !== 'none'")
+        assert page.locator("#mj-stage-strip .mj-stage-active").count() == 0
         # Optional focus edges must all exist in the canonical directed graph.
         focus_select = page.locator("#mj-focus-select")
         assert focus_select.locator("option").count() == 4
@@ -173,6 +208,11 @@ def main():
         assert side["documentHeight"] <= side["viewportHeight"] + 1, side
         assert page.locator("#mj-stage-strip .mj-stage-name").count() == 10
         assert page.locator("#mj-source-relationships path").count() == 7
+        page.wait_for_function("""() => document.querySelector('#mj-stage-strip .mj-stage-name').textContent === 'Business need'""")
+        stage_select.select_option("stage-5")
+        assert page.locator('.mj-stage-name[data-stage-id="stage-5"]').inner_text() == "Vendor selection"
+        assert page.locator("#mj-stage-focus rect").evaluate("(e) => e.style.display !== 'none'")
+        page.screenshot(path=str(OUT / "system-stage-1440.png"), full_page=True)
         page.evaluate("window.__mjourneyScene.redrawStages()")
         y_gap = page.evaluate("""() => {
           const model = window.__mjourneyResearchViewer;
