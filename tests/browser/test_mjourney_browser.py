@@ -146,12 +146,40 @@ def main():
             "(xs) => xs.map(x => x.dataset.sourceEdgeId)")
         assert len(highlighted_ids) == len(set(highlighted_ids)) == 7
         assert "edge45" in highlighted_ids and "edge52" in highlighted_ids
+        # Constrained routing is computed on *native* station coordinates.
+        # Every step is octilinear and endpoints equal the original moment;
+        # no additional station or original research edge has been introduced.
+        corridor = page.evaluate("""() => ({
+          paths: window.__mjourneyScene.corridorRoutes(),
+          stats: window.__mjourneyScene.corridorStats(),
+          intact: window.__mjourneyScene.corridorRoutes().every(route => {
+            const pos = window.__mjourneyResearchViewer.positions;
+            const same = (a, b) => Math.hypot(a.x-b.x,a.y-b.y) < .00001;
+            return window.MJourneyCorridorRouter.isOctilinear(route.points)
+              && same(route.points[0], pos.get(route.fromId))
+              && same(route.points.at(-1), pos.get(route.toId));
+          })
+        })""")
+        assert corridor["intact"], corridor
+        assert len(corridor["paths"]) == 7
+        assert {e["id"] for e in corridor["paths"]} == set(highlighted_ids)
+        assert corridor["stats"]["routeCount"] == 7
+        assert corridor["stats"]["maxClearanceViolationCount"] == 0, corridor
+        assert corridor["stats"]["totalBends"] < 30, corridor
+        assert all(e["minStationClearance"] is None or
+                   e["minStationClearance"] >= 13 for e in corridor["paths"]), corridor
+        selected_route_paths = {
+            e["id"]: e["path"] for e in corridor["paths"]
+        }
+        assert page.locator("#mj-source-relationships path").evaluate_all(
+            "(els) => els.every(e => e.dataset.corridorScore && e.dataset.corridorBends)")
         # Bigger rings require verified source branching and convergence.
         # Crossings and intermediate stations remain ordinary markers.
         ring_ids = page.locator("#mj-source-junctions circle").evaluate_all(
             "(xs) => xs.map(x => x.dataset.momentId)")
         assert sorted(ring_ids) == ["eq31", "eq37"]
         assert page.locator('#mj-source-junctions [data-moment-id="eq32"]').count() == 0
+        page.screenshot(path=str(OUT / "system-corridors-950.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-junctions-950.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-focus-950.png"), full_page=True)
 
@@ -248,6 +276,7 @@ def main():
             document.querySelector("#mj-stage-strip").getBoundingClientRect().top;
         }""")
         assert 35 <= y_gap <= 110, y_gap
+        page.screenshot(path=str(OUT / "system-corridors-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-junctions-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-focus-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-research-1440.png"), full_page=True)
@@ -255,6 +284,8 @@ def main():
         assert page.locator("#mj-source-junctions circle").count() == 0
         assert page.locator("#lines path.mj-subdued-category-shortcut").count() == 0
         assert page.locator("#mj-source-relationships path").count() == 0
+        assert {e["id"]: e["path"] for e in page.evaluate(
+            "window.__mjourneyScene.corridorRoutes()")} == selected_route_paths
         assert not issues, "Browser page errors: " + "; ".join(issues)
         browser.close()
     print("Chromium M-Journey inspector and source-route isolation smoke PASS")
