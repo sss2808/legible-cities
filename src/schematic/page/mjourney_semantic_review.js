@@ -27,12 +27,12 @@
 
   function init(model) {
     if (!model) return null;
-    const {data, svg, morePanel, positions, moments} = model;
+    const {data, svg, positions, moments} = model;
     const review = classify(data);
     if (!review.handoffs.length && !review.returns.length) return null;
-    const row = morePanel.querySelector(".mj-research-tools");
-    if (!row || !svg || document.getElementById("mj-semantic-review-select"))
-      return null;
+    const focusSelect = document.getElementById("mj-focus-select");
+    if (!focusSelect || !svg ||
+        focusSelect.querySelector('option[value="review:handoffs"]')) return null;
     const documentNS = "http://www.w3.org/2000/svg";
     const svgEl = tag => document.createElementNS(documentNS, tag);
     const group = svgEl("g");
@@ -57,33 +57,25 @@
     arrow.appendChild(tip);
     defs.appendChild(arrow);
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "mj-semantic-review";
-    wrapper.id = "mj-semantic-review";
-    const label = document.createElement("label");
-    label.htmlFor = "mj-semantic-review-select";
-    label.textContent = "Review";
-    const select = document.createElement("select");
-    select.id = "mj-semantic-review-select";
-    select.setAttribute("aria-label", "Highlight authored handoffs or lifecycle return for research review");
-    for (const [value, name] of [["", "No review overlay"],
-      ["handoffs", "Handoffs (" + review.handoffs.length + ")"],
-      ["returns", "Lifecycle return (" + review.returns.length + ")"]]) {
+    // Reuse the original directed-relationship selector. A new toolbar row
+    // would reduce the native compact viewport and crop authored stations.
+    const status = document.querySelector(".mj-focus-note");
+    if (!status) throw new Error("Original relationship qualification is missing");
+    const defaultNote = status.textContent;
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.id = "mj-semantic-review-status";
+    for (const [value, name] of [
+      ["review:handoffs", "Handoffs (research review, not transfers)"],
+      ["review:returns", "Lifecycle return (research review)"],
+    ]) {
       const option = document.createElement("option");
       option.value = value;
       option.textContent = name;
-      select.appendChild(option);
+      focusSelect.appendChild(option);
     }
-    label.appendChild(select);
-    const status = document.createElement("span");
-    status.id = "mj-semantic-review-status";
-    status.className = "mj-semantic-review-note";
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    wrapper.append(label, status);
-    row.after(wrapper);
-
-    const focusSelect = document.getElementById("mj-focus-select");
+    focusSelect.setAttribute("aria-label",
+      "Highlight source relationships or review handoffs and lifecycle return; no approved transit transfers");
     const guides = [...svg.querySelectorAll("#lines path[data-src][data-dst]")]
       .map(path => {
         const parts = (path.getAttribute("d") || "").match(
@@ -103,7 +95,7 @@
     function clearOverlay() { group.replaceChildren(); }
     function render(value) {
       clearOverlay();
-      if (value === "handoffs") {
+      if (value === "review:handoffs") {
         for (const e of review.handoffs) {
           const route = byRoute.get(e.id);
           if (!route || !positions.has(e.fromId) || !positions.has(e.toId))
@@ -128,7 +120,7 @@
         status.textContent = review.handoffs.length + " authored handoffs; " +
           review.handoffs.filter(e => e.crossLayer).length +
           " cross layers. Review candidates, not approved transit interchanges.";
-      } else if (value === "returns") {
+      } else if (value === "review:returns") {
         for (const e of review.returns) {
           // A full-width track would falsely imply travel continuity. Instead,
           // mark the source and target of the EXISTING authored recurrence.
@@ -156,29 +148,17 @@
             (moments.get(e.toId)?.label || e.toId)).join("; ") +
           ". Endpoint markers only, not a transit route or measured duration.";
       } else {
-        status.textContent = "Original category guides are non-traversable. Source review does not establish customer travel.";
+        status.textContent = defaultNote;
       }
     }
-    select.addEventListener("change", () => {
-      if (select.value && focusSelect && focusSelect.value) {
-        focusSelect.value = "";
-        focusSelect.dispatchEvent(new Event("change", {bubbles: true}));
-      }
-      render(select.value);
-    });
-    if (focusSelect) focusSelect.addEventListener("change", () => {
-      if (focusSelect.value && select.value) {
-        select.value = "";
-        render("");
-      }
-    });
+    focusSelect.addEventListener("change", () => render(focusSelect.value));
     render("");
     const api = Object.freeze({
       counts: () => ({handoffs: review.handoffs.length,
         crossLayerHandoffs: review.handoffs.filter(e => e.crossLayer).length,
         returns: review.returns.length, stations: review.sourceMomentCount,
         directedRelations: review.sourceRelationCount}),
-      state: () => select.value,
+      state: () => focusSelect.value.startsWith("review:") ? focusSelect.value : "",
       overlaySourceIds: () => [...new Set([...group.children]
         .map(node => node.getAttribute("data-source-edge-id")))],
     });
