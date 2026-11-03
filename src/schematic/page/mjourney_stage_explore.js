@@ -75,10 +75,10 @@
   }
 
   function visibleHeadings() {
-    if (!enabled) {
-      restoreHeadings();
-      return;
-    }
+    // On returning to Fit, let the original scene's measured heading
+    // positions stand. Clearing left/maxWidth *after* redraw collapses all
+    // ten headings at x=0, especially when resizing back to compact.
+    if (!enabled) return;
     const matrix = svg.getScreenCTM();
     if (!matrix) return;
     const bounds = stage.getBoundingClientRect();
@@ -119,19 +119,12 @@
   }
 
   function updatePresentation() {
-    // SVG CSS transforms and upstream responsive native width updates settle
-    // during the next paint. Redrawing in this same JS task reads the stale
-    // screen CTM and can bunch all stage titles against x=0 on Fit/resize.
-    // Keep the original source headers and label engine, but measure AFTER
-    // layout rather than introducing a second station projection.
-    requestAnimationFrame(() => {
-      window.__mjourneyScene?.redrawStages?.();
-      window.__mjourneyLabels?.redraw?.();
-      requestAnimationFrame(() => {
-        window.__mjourneyScene?.redrawStages?.();
-        visibleHeadings();
-      });
-    });
+    // Reuse the native scene and labels at the same source coordinates.
+    // In Fit, the scene owns header positions; our explorer must not clear
+    // their measured placement when its own visibility pass runs.
+    window.__mjourneyScene?.redrawStages?.();
+    window.__mjourneyLabels?.redraw?.();
+    requestAnimationFrame(() => requestAnimationFrame(visibleHeadings));
   }
 
   function render() {
