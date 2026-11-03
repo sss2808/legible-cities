@@ -84,7 +84,12 @@
   header.append(heading, close);
   const content = elem("div", "mj-inspector-body");
   aside.append(header, content);
-  document.body.appendChild(aside);
+  // One layout owns both map and research details. Unlike a fixed overlay,
+  // the inspector takes real layout space so it cannot cover tracks or labels.
+  const workspace = elem("div", "mj-research-workspace");
+  workspace.id = "mj-research-workspace";
+  stage.replaceWith(workspace);
+  workspace.append(stage, aside);
 
   const mark = document.createElementNS("http://www.w3.org/2000/svg", "circle");
   mark.setAttribute("id", "mj-selected-station");
