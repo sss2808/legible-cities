@@ -27,6 +27,83 @@ def main() -> None:
         page.wait_for_function("!!window.__mjourneyCartography")
         source = json.loads((OUT / "system-browser.research.json").read_text(
             encoding="utf-8"))
+        # A visible explanatory note may not paint over research Moments.
+        # This is a painted-geometry check, not just SVG stage containment.
+        def check_note_clearance(width: int, inspector_open: bool) -> None:
+            measured = page.evaluate("""() => {
+              const note = document.querySelector('#mj-static-cartography-note');
+              const inspector = document.querySelector('#mj-inspector');
+              const svg = document.querySelector('#stage svg');
+              const noteRect = note.getBoundingClientRect();
+              const style = getComputedStyle(note);
+              const painted = !note.hidden && style.display !== 'none' &&
+                style.visibility !== 'hidden' && noteRect.width > 0 &&
+                noteRect.height > 0;
+              const box = r => ({left:r.left,top:r.top,right:r.right,bottom:r.bottom});
+              const clash = (a,b,m=2) => a.left < b.right + m &&
+                a.right + m > b.left && a.top < b.bottom + m &&
+                a.bottom + m > b.top;
+              const labels = [...document.querySelectorAll(
+                '#mj-readable-labels .mj-readable-label')]
+                .filter(el => el.getClientRects().length &&
+                              getComputedStyle(el).visibility !== 'hidden');
+              const tags = [...document.querySelectorAll(
+                '#mj-cartography-terminus-labels .mj-cartography-tag')]
+                .filter(el => el.getClientRects().length);
+              const noteBox = box(noteRect), ctm = svg.getScreenCTM();
+              const discHits = [...document.querySelectorAll(
+                '#mj-cartographic-markers circle[data-source-moment-ref], ' +
+                '#mj-cartographic-source-branch circle[data-source-junction-ref]')]
+                .filter(el => getComputedStyle(el.parentElement).display !== 'none')
+                .map(el => {
+                  const p = svg.createSVGPoint();
+                  p.x = Number(el.getAttribute('cx'));
+                  p.y = Number(el.getAttribute('cy'));
+                  const pos = p.matrixTransform(ctm);
+                  const r = Number(el.getAttribute('r')) *
+                    Math.hypot(ctm.a,ctm.b) + 2;
+                  const dx = Math.max(noteBox.left-pos.x,0,pos.x-noteBox.right);
+                  const dy = Math.max(noteBox.top-pos.y,0,pos.y-noteBox.bottom);
+                  return {id:el.dataset.sourceMomentRef ||
+                    el.dataset.sourceJunctionRef,hit:dx*dx+dy*dy < r*r};
+                }).filter(x=>x.hit).map(x=>x.id);
+              const visibleOnScreen = noteRect.left >= 0 &&
+                noteRect.right <= innerWidth + 1 &&
+                noteRect.top >= 0 && noteRect.bottom <= innerHeight + 1;
+              const inspectorRect = inspector.getBoundingClientRect();
+              return {
+                painted, text:note.textContent, host:note.parentElement.id,
+                noteBox, visibleOnScreen,
+                insideInspector:noteRect.left >= inspectorRect.left &&
+                  noteRect.right <= inspectorRect.right &&
+                  noteRect.top >= inspectorRect.top &&
+                  noteRect.bottom <= inspectorRect.bottom,
+                labelHits:labels.filter(el =>
+                  clash(noteBox,box(el.getBoundingClientRect())))
+                  .map(el=>el.textContent.trim()),
+                tagHits:tags.filter(el =>
+                  clash(noteBox,box(el.getBoundingClientRect())))
+                  .map(el=>el.textContent.trim()),
+                stageHeadingHits:[...document.querySelectorAll(
+                  '#mj-stage-strip .mj-stage-name')]
+                  .filter(el=>clash(noteBox,box(el.getBoundingClientRect())))
+                  .map(el=>el.dataset.visibleStage),
+                discHits,
+              };
+            }""")
+            assert measured["painted"], measured
+            assert "not transit transfers" in measured["text"], measured
+            assert measured["visibleOnScreen"], measured
+            assert not measured["labelHits"], measured
+            assert not measured["tagHits"], measured
+            assert not measured["stageHeadingHits"], measured
+            assert not measured["discHits"], measured
+            if width <= 1080 and inspector_open:
+                assert measured["host"] == "mj-inspector", measured
+                assert measured["insideInspector"], measured
+            else:
+                assert measured["host"] == "stage", measured
+
         assert len(source["canonical"]["moments"]) == 67
         assert len(source["canonical"]["relationships"]) == 87
         assert len(source["canonical"]["categories"]) == 7
@@ -125,6 +202,7 @@ def main() -> None:
             assert result["inspectorHidden"]
             assert result["docWidth"] <= width + 1, result
             assert result["docHeight"] <= height + 1, result
+            check_note_clearance(width, inspector_open=False)
             assert len(result["headings"]) == 10
             assert [h["name"] for h in result["headings"]] == [
                 s["name"] for s in source["canonical"]["stages"]]
@@ -219,6 +297,7 @@ def main() -> None:
             assert inspector["visible"] == 67, inspector
             assert inspector["inspectorOpen"]
             assert inspector["sourceViewBox"], inspector
+            check_note_clearance(width, inspector_open=True)
             page.screenshot(path=str(OUT / f"cartography-w382-inspector-{width}.png"),
                             full_page=True)
         page.keyboard.press("Escape")
