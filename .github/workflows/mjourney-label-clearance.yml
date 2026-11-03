@@ -1,0 +1,82 @@
+name: M-Journey TM-01d rail-aware Moment label clearance
+
+on:
+  push:
+    branches:
+      - feature/mjourney-rail-aware-label-clearance
+  pull_request:
+    paths:
+      - "src/schematic/page/mjourney_labels.js"
+      - "tests/browser/test_mjourney_label_clearance.py"
+      - ".github/workflows/mjourney-label-clearance.yml"
+      - "docs/MJOURNEY_RAIL_AWARE_LABELS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-label-module:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original renderer dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Validate labels and original fixture
+        run: |
+          node --check src/schematic/page/mjourney_labels.js
+          python -m pytest -q tests/test_mjourney.py tests/test_mjourney_research_contract.py tests/test_mjourney_category_corridors.py
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p = Path("fixtures/mjourney/equipment-sanitized-v1.json")
+          assert hashlib.sha256(p.read_bytes()).hexdigest() == "580a66acd1b9f55fe4fa0aa3624bb4aa500028e34cdf8bac01cf138b7c59ce00"
+          print("P0a source fingerprint unchanged")
+          PY
+
+  browser-rail-clearance:
+    needs: source-and-label-module
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original renderer and Chromium
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Build source-certified native System
+        run: |
+          mkdir -p out
+          python bin/mjourney-preview --system-v3 --stage-demand-corridors --html \
+            --focus-path ae=edge44,edge48,edge49,edge50 \
+            --focus-path direct=edge45,edge51,edge52 \
+            --output out/system-browser.svg
+      - name: Measure label-line collisions in live Chromium
+        run: python tests/browser/test_mjourney_label_clearance.py
+      - name: Preserve inherited responsive, semantic and stage exploration behavior
+        run: |
+          python tests/browser/test_mjourney_browser.py
+          python tests/browser/test_mjourney_semantic_review.py
+          python tests/browser/test_mjourney_responsive_frame.py
+          python tests/browser/test_mjourney_stage_explore.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-tm01d-rail-label-visual-review
+          path: |
+            out/rail-labels-key-1440.png
+            out/rail-labels-more-1440.png
+            out/rail-labels-explore-1440.png
+            out/rail-labels-compact-950.png
+            out/rail-labels-metrics.json
+            out/system-browser.audit.json
+            out/system-browser.research.json
+          retention-days: 30
