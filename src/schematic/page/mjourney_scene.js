@@ -38,6 +38,18 @@
     const rootCTM = svg.getScreenCTM();
     if (!rootCTM) return;
     const box = stage.getBoundingClientRect();
+    // At tall aspect ratios the native SVG is vertically letterboxed. Anchor
+    // headings to the real station field, not to the top of the empty panel.
+    const screenY = [];
+    for (const p of positions.values()) {
+      const pt = svg.createSVGPoint();
+      pt.x = p.x;
+      pt.y = p.y;
+      screenY.push(pt.matrixTransform(rootCTM).y - box.top);
+    }
+    if (screenY.length)
+      strip.style.top = Math.max(0, Math.min(box.height - 50,
+        Math.min(...screenY) - 84)) + "px";
     const centers = stageLabels.map(({item}, i) => {
       const xs = data.canonical.moments
         .filter(m => m.stageId === item.id && positions.has(m.id))
