@@ -1969,7 +1969,7 @@ def test_the_page_describes_its_map_once_from_the_layout_it_already_has(tmp_path
     # map description, but they are mutually exclusive *source* branches.
     # Counting all string literals in page.html conflates two runtime modes.
     mj_start = body.index("    if (isMJourney) {")
-    exit_marker = "      return;\\n    }"
+    exit_marker = "      return;\n    }"
     mj_end = body.index(exit_marker, mj_start)
     research_branch = body[mj_start:mj_end]
     normal_branch = body[mj_end + len(exit_marker):]
