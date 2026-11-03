@@ -19,6 +19,13 @@ def main() -> None:
     demand = json.loads((OUT / "system-stage-demand.audit.json").read_text())
     original_nodes = legacy["projection"]["stationCoords"]
     new_nodes = demand["projection"]["stationCoords"]
+    legacy_contract = json.loads((OUT / "system-browser.research.json").read_text())
+    demand_contract = json.loads((OUT / "system-stage-demand.research.json").read_text())
+    assert legacy_contract["canonicalSemanticSha256"] == demand_contract[
+        "canonicalSemanticSha256"]
+    assert legacy_contract["canonical"] == demand_contract["canonical"]
+    assert legacy_contract["presentation"]["categoryGuides"] == demand_contract[
+        "presentation"]["categoryGuides"]
     assert len(original_nodes) == len(new_nodes) == 67
     assert set(original_nodes) == set(new_nodes)
     assert all(original_nodes[k][0] == new_nodes[k][0] for k in original_nodes)
@@ -36,6 +43,25 @@ def main() -> None:
     errors = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        # Capture the legacy geometry with exactly the same visitor choices:
+        # both focus sequences, canonical Funding authorized inspector, Key
+        # labels, and the same two physical viewports.
+        baseline_page = browser.new_page(viewport={"width": 950, "height": 520})
+        baseline_page.on("pageerror", lambda e: errors.append("baseline: " + str(e)))
+        baseline_page.goto((OUT / "system-browser.html").as_uri(), wait_until="load")
+        baseline_picker = baseline_page.locator("#mj-moment-picker")
+        baseline_picker.wait_for(timeout=15000)
+        baseline_page.locator("#mj-focus-select").select_option("all")
+        baseline_picker.select_option("eq31")
+        assert baseline_page.locator("#mj-source-relationships path").count() == 7
+        baseline_page.screenshot(
+            path=str(OUT / "system-demand-baseline-selected-950.png"),
+            full_page=True)
+        baseline_page.set_viewport_size({"width": 1440, "height": 900})
+        baseline_page.screenshot(
+            path=str(OUT / "system-demand-baseline-selected-1440.png"),
+            full_page=True)
+        baseline_page.close()
         page = browser.new_page(viewport={"width": 950, "height": 520})
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.goto((OUT / "system-stage-demand.html").as_uri(), wait_until="load")
