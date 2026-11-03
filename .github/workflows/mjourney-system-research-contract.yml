@@ -7,6 +7,7 @@ on:
     paths:
       - "src/schematic/mjourney_research_contract.py"
       - "src/schematic/page/mjourney_inspector.js"
+      - "tests/browser/test_mjourney_browser.py"
       - "src/schematic/page/page.html"
       - "tests/test_mjourney_research_contract.py"
       - "bin/mjourney-preview"
@@ -78,4 +79,41 @@ jobs:
             out/research-starter.svg
             out/research-starter.audit.json
             out/research-starter.research.json
+          retention-days: 30
+
+
+  browser-inspector-smoke:
+    needs: canonical-research-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install native fork and Chromium automation
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Generate source-certified System browser viewer
+        run: |
+          mkdir -p out
+          python bin/mjourney-preview --system-v3 --html \
+            --focus-path ae=edge44,edge48,edge49,edge50 \
+            --focus-path direct=edge45,edge51,edge52 \
+            --output out/system-browser.svg
+      - name: Validate real browser interaction and capture desktop widths
+        run: python tests/browser/test_mjourney_browser.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-system-research-browser-screens
+          path: |
+            out/system-browser.html
+            out/system-browser.svg
+            out/system-browser.audit.json
+            out/system-browser.research.json
+            out/system-research-950.png
+            out/system-research-1440.png
           retention-days: 30
