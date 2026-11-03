@@ -175,6 +175,92 @@
   if (stationLayer) svg.insertBefore(overlay, stationLayer);
   else svg.appendChild(overlay);
 
+  // A junction is a SOURCE-BACKED branch or convergence, never a geometric
+  // intersection. Derive it from >=2 distinct, validated directed sequences
+  // with the same first and final canonical moments and matching edge kinds.
+  const sourceJunctions = [];
+  const focusPairs = new Map();
+  for (const candidate of focus) {
+    const seq = candidate.sourceEdgeIds;
+    if (!Array.isArray(seq) || seq.length === 0) continue;
+    const first = canonicalRelations.get(seq[0]);
+    const last = canonicalRelations.get(seq[seq.length - 1]);
+    if (!first || !last) continue;
+    const key = first.fromId + "|" + last.toId;
+    if (!focusPairs.has(key)) focusPairs.set(key, []);
+    focusPairs.get(key).push({candidate, first, last});
+  }
+  for (const paths of focusPairs.values()) {
+    const first = paths[0].first, last = paths[0].last;
+    if (paths.length < 2 ||
+        new Set(paths.map(p => p.first.toId)).size < 2 ||
+        new Set(paths.map(p => p.last.fromId)).size < 2 ||
+        !paths.every(p => p.first.kind === "branch" &&
+                          p.last.kind === "convergence")) continue;
+    sourceJunctions.push({
+      momentId: first.fromId, role: "branch-origin",
+      edgeIds: paths.map(p => p.first.id).sort(),
+    });
+    sourceJunctions.push({
+      momentId: last.toId, role: "reconvergence",
+      edgeIds: paths.map(p => p.last.id).sort(),
+    });
+  }
+  const junctionMarks = svgEl("g");
+  junctionMarks.id = "mj-source-junctions";
+  junctionMarks.setAttribute("pointer-events", "none");
+  junctionMarks.setAttribute("aria-hidden", "true");
+  const originalStationLayer = svg.querySelector("#stations");
+  if (originalStationLayer) svg.insertBefore(junctionMarks, originalStationLayer);
+  else svg.appendChild(junctionMarks);
+
+  // A category shortcut from a branching origin directly to its convergence
+  // is *not* a research edge unless the source says so. Subordinate just
+  // that visual guide while a genuine branch is highlighted, reducing the
+  // accidental triangle without deleting category membership or topology.
+  const originalDirectedPairs = new Set(relationships.map(r => r.fromId + "|" + r.toId));
+  const subduableGuides = [];
+  for (const origin of sourceJunctions.filter(j => j.role === "branch-origin")) {
+    const target = sourceJunctions.find(j => j.role === "reconvergence");
+    if (!target) continue;
+    const pair = origin.momentId + "|" + target.momentId;
+    if (originalDirectedPairs.has(pair)) continue;
+    for (const path of svg.querySelectorAll("#lines path[data-src][data-dst]")) {
+      const src = path.getAttribute("data-src"), dst = path.getAttribute("data-dst");
+      if ((src === origin.momentId && dst === target.momentId) ||
+          (src === target.momentId && dst === origin.momentId)) {
+        subduableGuides.push(path);
+        const pathId = path.getAttribute("id");
+        if (pathId) for (const casing of svg.querySelectorAll("#lines use")) {
+          if (casing.getAttribute("href") === "#" + pathId)
+            subduableGuides.push(casing);
+        }
+      }
+    }
+  }
+  function showJunctions(focusValue) {
+    junctionMarks.replaceChildren();
+    const active = !!focusValue;
+    for (const guide of subduableGuides)
+      guide.classList.toggle("mj-subdued-category-shortcut", active);
+    if (!active) return;
+    for (const item of sourceJunctions) {
+      const pos = positions.get(item.momentId);
+      if (!pos) throw new Error("Source junction has no native moment " + item.momentId);
+      const ring = svgEl("circle");
+      ring.setAttribute("cx", String(pos.x));
+      ring.setAttribute("cy", String(pos.y));
+      ring.setAttribute("r", "14");
+      ring.setAttribute("fill", "#181310");
+      ring.setAttribute("stroke", item.role === "branch-origin" ? "#E9A15E" : "#6CB7EA");
+      ring.setAttribute("stroke-width", "4");
+      ring.setAttribute("data-junction-role", item.role);
+      ring.setAttribute("data-moment-id", item.momentId);
+      ring.setAttribute("data-source-edge-ids", item.edgeIds.join(","));
+      junctionMarks.appendChild(ring);
+    }
+  }
+
   const colors = ["#E9A15E", "#6CB7EA", "#A794E9"];
   const defs = svg.querySelector("defs") || (() => {
     const node = svgEl("defs");
@@ -215,6 +301,7 @@
   }
   function renderFocus(value) {
     overlay.replaceChildren();
+    showJunctions(value);
     for (const [i, candidate] of focus.entries()) {
       if (value !== "all" && value !== candidate.id) continue;
       for (const edgeId of candidate.sourceEdgeIds) {
@@ -282,5 +369,7 @@
     redrawStages: updateStageHeaders,
     activeStageId: () => activeStageId,
     focusStage,
+    junctionRoles: () => sourceJunctions.map(j => ({...j})),
+    subduableShortcutCount: () => subduableGuides.filter(e => e.tagName.toLowerCase() === "path").length,
   });
 })();
