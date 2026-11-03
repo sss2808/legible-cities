@@ -87,7 +87,6 @@
     }
     // A fixed pair of endpoints can be reached with 0/45/90 segments.
     // Vary diagonal size and reserve horizontal/vertical approach corridor.
-    const shares = [0, .25, .5, .75, 1];
     const splits = [0, .35, .65, 1];
     for (const diagonalShare of [1, .8, .55, .35]) {
       const diag = range * diagonalShare;
@@ -110,7 +109,7 @@
     // These bounded S-shaped detours use only H/V/45 segments, no new stops.
     if (Math.abs(dx) < EPS && Math.abs(dy) > 45) {
       for (const offset of [-20, 20, -34, 34]) {
-        const side = sign(offset), abs = Math.abs(offset);
+        const abs = Math.abs(offset);
         const sy0 = sign(dy);
         if (Math.abs(dy) < 2 * abs) continue;
         record([a, pt(a.x + offset, a.y + sy0 * abs),
