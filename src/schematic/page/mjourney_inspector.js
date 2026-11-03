@@ -45,7 +45,7 @@
     return e;
   }
   const toolbar = elem("div", "mj-research-tools");
-  const caption = elem("label", "", "Inspect research moment");
+  const caption = elem("label", "", "Moment");
   caption.htmlFor = "mj-moment-picker";
   const selector = elem("select", "");
   selector.id = "mj-moment-picker";
