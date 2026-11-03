@@ -83,7 +83,8 @@ def main():
         assert page.locator("#mj-stage-strip .mj-stage-active").count() == 0
         # Optional focus edges must all exist in the canonical directed graph.
         focus_select = page.locator("#mj-focus-select")
-        assert focus_select.locator("option").count() == 4
+        # Two source-typed review options reuse the existing original picker.
+        assert focus_select.locator("option").count() == 6
         assert page.locator("#mj-source-relationships path").count() == 0
         assert page.locator("#mj-source-junctions circle").count() == 0
         junctions = page.evaluate("window.__mjourneyScene.junctionRoles()")
