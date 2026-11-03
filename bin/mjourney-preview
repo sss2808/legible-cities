@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
         "svg": args.output.name,
         "timetable": None,
         "routingEnabled": False,
-        "internalTransitNetworkBuiltByUpstream": bool(args.html and not args.system_v3),
+        "internalTransitNetworkBuiltByUpstream": False,
         "passengerTripPickerSuppressed": bool(args.html),
         "researchNavigationImplemented": bool(args.system_v3 and args.html),
         "stageConstraintStatus": (
