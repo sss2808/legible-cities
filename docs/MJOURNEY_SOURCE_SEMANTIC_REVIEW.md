@@ -69,6 +69,22 @@ Screenshots and the machine-readable audit are uploaded as CI artifacts for **in
 
 The existing upstream parent [PR #20](https://github.com/sss2808/legible-cities/pull/20) and responsive [PR #21](https://github.com/sss2808/legible-cities/pull/21) inherited a general `tests/test_site.py` page-description failure. The new dedicated review suite does not fix or weaken that unrelated upstream test. Broad-suite status and exact-head acceptance must be checked separately before integration.
 
+## Actual screenshot review (2026-11-03)
+
+The first revised exact-head [source and Chromium run #41635850862](https://github.com/sss2808/legible-cities/actions/runs/41635850862) **passed both focused jobs**, including the original 950 × 520 responsive test that failed when a separate review row was used. The run produced [PNG/HTML/metrics artifact #13230676453](https://github.com/sss2808/legible-cities/actions/runs/41635850862/artifacts/13230676453). The screenshots were opened and reviewed, rather than treating a green test as visual approval.
+
+**Observed strengths:** all three authored handoff strokes are identifiable as distinct dashed amber directed overlays, with source IDs/endpoints checked; the return mode shows just two source endpoints; original branch-alternative selection remains separate and station/category counts stay intact. The 950 px layout no longer adds a new toolbar row.
+
+**Observed limitations:**
+
+- At **950 × 520**, the selected long text in the existing Relationships control was visibly truncated. The subsequent small source-only copy correction shortens the displayed review option to **Handoffs (review)**; the longer semantic qualification remains in the native select title, accessible name and desktop text. Re-capture and verify this on its new exact head.
+- At **1440 × 900**, the composed inspector makes the panoramic seven-rail map occupy a relatively shallow horizontal band, leaving substantial unused space beneath. The static native Fit was intentionally retained rather than stretching 45-degree geometry. Camera/viewport work remains **TM-01**, not a research semantics change.
+- Dashed handoff strokes necessarily intersect or overlap the original category-guide rail field in the right-hand lifecycle stages. Source authority is correct, but the visual distinction from a navigable interchange still deserves comprehension testing.
+- In the **950 px inspector-open lifecycle** screenshot, the upper documentation rail comes close to the top crop boundary; the independent station-center containment assertion is **not** a complete route/label clipping audit. Geometry owner must evaluate the full painted rail and label bounds before visual acceptance.
+- The seven categories remain largely separate, horizontally organized lines. These research highlights do **not** establish the shared-corridor and network cartography of the Mexico City Metro reference. Reorganizing the map would require separately reviewed traversal semantics and geometry, not fabricated junctions.
+
+**Disposition:** functional source-relationship visual experiment accepted for further review **only**, not approved cartographic finish. Owner must independently inspect the final source head's screenshots, final exact-head CI, 950 px readability and 1440 px framing. Do not merge or embed in portfolio/product on this basis.
+
 ## Downstream gates
 
 - **Research owner:** review W375's proposed treatment of handoff and recurrence; decide if any item warrants a new operational interchange marker. None is preapproved here.
