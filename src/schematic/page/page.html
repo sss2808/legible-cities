@@ -777,11 +777,13 @@ __SOCIAL__
       const paragraph = document.createElement("p");
       paragraph.id = "map-description";
       paragraph.className = "sr-only";
+      const hasInspector = document.documentElement.hasAttribute("data-mjourney-inspector");
       paragraph.textContent = "Research journey schematic with "
         + mapXY.size + " unique moments and " + layout.lines.length
         + " category groups. Colored guides show grouping membership, not"
-        + " directed research connections or customer travel. Use the research"
-        + " moment selector to inspect documented source relationships."
+        + " directed research connections or customer travel."
+        + (hasInspector ? " Use the research moment selector to inspect original relationships." :
+            " This legacy preview has no research moment inspector.")
         + " Shared colors or crossing lines do not establish an interchange.";
       svg.after(paragraph);
       svg.setAttribute("role", "img");
