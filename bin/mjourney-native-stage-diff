@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+"""Diagnose the *first* native LOOM stage changing source research topology.
+
+Compare input, line-order (loom), and schematic-coordinate (octi) artifacts.
+The source IDs, directed research relationships and stage order are frozen
+in P0a; post-solver graphs are intentionally audited as UNDIRECTED tracks.
+This script NEVER repairs or approves the graph.
+"""
+from __future__ import annotations
+
+from collections import defaultdict
+from pathlib import Path
+from hashlib import sha256
+import argparse
+import json
+import runpy
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+from schematic.linegraph import LineGraph
+from schematic.mjourney_projection import from_solver_point
+from schematic.mjourney_source_integrity import (
+    build_source_manifest, validate_projection_graph, fingerprint,
+)
+from schematic.render import octilinearity
+
+
+def station_keys(graph):
+    return sorted(n.station_id for n in graph.stations)
+
+
+def line_order_on_direct_stations(graph):
+    """Record LOOM's solved ordered offsets only for directly joined stations.
+
+    Helper vertices and split edges may change the correspondence; the
+    raw signed endpoints are intentionally *not* assumed to be research edges.
+    """
+    by_node = {node.id: node.station_id for node in graph.stations}
+    out = defaultdict(list)
+    for edge in graph.edges:
+        a, b = by_node.get(edge.src), by_node.get(edge.dst)
+        if not a or not b:
+            continue
+        key = tuple(sorted((a, b)))
+        ids = [line.id for line in edge.lines]
+        out["|".join(key)].append({
+            "edgeDirection": [a, b],
+            "orderedLineIds": ids,
+            "lineSet": sorted(ids),
+            "provenanceId": edge.props.get("sourceEdgeIds"),
+        })
+    return dict(sorted(out.items()))
+
+
+def stage_snapshot(name, graph, seed, source, manifest, helpers):
+    """Produce a semantic + geometric audit for *one* optimization stage."""
+    source_keys = set(station_keys(seed))
+    present_keys = station_keys(graph)
+    expected = helpers["adjacency"](seed)
+    observed = helpers["adjacency"](graph)
+    changes = {}
+    for lid in sorted(set(expected) | set(observed)):
+        before, after = expected.get(lid, set()), observed.get(lid, set())
+        if before != after:
+            changes[lid] = {
+                "lost": [list(p) for p in sorted(before-after)],
+                "added": [list(p) for p in sorted(after-before)],
+            }
+    structural = validate_projection_graph(
+        graph, manifest, require_source_edge_ids=(name=="input"))
+    stage = helpers["stage_review"](graph, source)
+    good,total = octilinearity(graph, tol_deg=1.0)
+    weighted = good/total if total else 0
+    order = line_order_on_direct_stations(graph)
+    station_positions = {n.station_id: [round(n.coord[0], 6), round(n.coord[1], 6)]
+                         for n in graph.stations}
+    # For comparisons, use canonical identities, NEVER transient C++ node ids.
+    return {
+        "stage": name,
+        "nodes": len(graph.nodes), "geometryOnlyNodes":len(graph.nodes)-len(graph.stations),
+        "stations": len(graph.stations), "graphEdges": len(graph.edges),
+        "lineIds": sorted({l.id for e in graph.edges for l in e.lines}),
+        "stationIdentityPreserved": set(present_keys)==source_keys
+                                    and len(present_keys)==len(source_keys),
+        "missingStations": sorted(source_keys-set(present_keys)),
+        "extraStations": sorted(set(present_keys)-source_keys),
+        "perLineAdjacencyPreserved": not changes,
+        "perLineAdjacencyDifferences": changes,
+        "semanticAudit": structural,
+        "stageOrder": stage,
+        "weightedOctilinearity": {
+            "fraction": round(weighted, 8),
+            "withinOneDegree": weighted>=0.995,
+            "acceptedLength": round(good,5),
+            "totalLength": round(total,5),
+        },
+        "directStationEdgeOrder":order,
+        "stationPositions":station_positions,
+        "stationPositionFingerprint":fingerprint(station_positions),
+        "routeAdjacencyFingerprint":fingerprint(
+            {k:[list(v) for v in sorted(pairs)] for k,pairs in sorted(observed.items())}
+        ),
+    }
+
+
+def first_changed_stage(stages):
+    """Pinpoint first input/loom/octi comparison that fails any hard gate."""
+    for name in ("input", "loom", "octi"):
+        state=stages[name]
+        if (not state["stationIdentityPreserved"]
+            or not state["perLineAdjacencyPreserved"]
+            or not state["stageOrder"]["preserved"]):
+            return name
+    return None
+
+
+def differences(a,b):
+    """Per-stage deltas, without comparing unstable LOOM pointers."""
+    prev,cur=a["directStationEdgeOrder"],b["directStationEdgeOrder"]
+    shared=set(prev)&set(cur)
+    ordered_changed=[]
+    for pair in sorted(shared):
+        # Compare only unchanged source direct-edge cardinality and membership.
+        if len(prev[pair])!=1 or len(cur[pair])!=1:continue
+        ap=prev[pair][0]["orderedLineIds"]
+        bp=cur[pair][0]["orderedLineIds"]
+        # An edge may reverse orientation after optimization; account for that
+        # before claiming a route-order inversion.
+        if prev[pair][0]["edgeDirection"]!=cur[pair][0]["edgeDirection"]:
+            bp=list(reversed(bp))
+        if ap!=bp:
+            ordered_changed.append({"stationPair":pair,"before":ap,"after":bp})
+    return {
+        "stationPositionChanged":a["stationPositionFingerprint"]!=b["stationPositionFingerprint"],
+        "perLineAdjacencyChanged":a["routeAdjacencyFingerprint"]!=b["routeAdjacencyFingerprint"],
+        "stageOrderChanged":a["stageOrder"]["preserved"]!=b["stageOrder"]["preserved"]
+                            or a["stageOrder"]["bounds"]!=b["stageOrder"]["bounds"],
+        "directStationEdgeOrderChanges":ordered_changed,
+        "firstStageHasDirectPairsAbsent": sorted(set(prev)-set(cur)),
+        "newDirectStationPairs":sorted(set(cur)-set(prev)),
+        "startStage":a["stage"],"endStage":b["stage"],
+    }
+
+
+def analyze(source, seed, manifest, input_graph, loom_graph, octi_graph, helpers):
+    snapshots = {
+        "input":stage_snapshot("input", input_graph, seed, source, manifest, helpers),
+        "loom":stage_snapshot("loom", loom_graph, seed, source, manifest, helpers),
+        "octi":stage_snapshot("octi", octi_graph, seed, source, manifest, helpers),
+    }
+    return {
+        "schema":"mjourney-native-stage-differential/v1",
+        "scope":"V7 59/68/11 diagnostic route projection, not final grouping-line product",
+        "nativeAccepted":not first_changed_stage(snapshots)
+                         and snapshots["octi"]["weightedOctilinearity"]["withinOneDegree"],
+        "firstHardGateFailure":first_changed_stage(snapshots),
+        "sourceSemanticSha256":manifest["semanticSha256"],
+        "stages":snapshots,
+        "transitions":{
+            "inputToLoom":differences(snapshots["input"],snapshots["loom"]),
+            "loomToOcti":differences(snapshots["loom"],snapshots["octi"]),
+        },
+        "interpretation":"An upstream stage can change centerlines or track occupancy. "
+                         "Changes to graph adjacency are not made valid by 45-degree geometry. "
+                         "The canonical directed-edge meaning remains in the P0a manifest.",
+    }
+
+
+def load_as_diagram(path):
+    return LineGraph.from_geojson(json.loads(path.read_text())).reproject(from_solver_point)
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path,
+                        default=ROOT/"fixtures/mjourney/equipment-sanitized-v1.json")
+    parser.add_argument("--input",type=Path,required=True)
+    parser.add_argument("--loom",type=Path,required=True)
+    parser.add_argument("--octi",type=Path,required=True)
+    parser.add_argument("--output",type=Path,required=True)
+    args=parser.parse_args()
+    raw=args.source.read_bytes()
+    source=json.loads(raw)
+    helpers=runpy.run_path(str(ROOT/"bin/mjourney-system-network"))
+    manifest=build_source_manifest(source,helpers["ROUTES"],source_bytes=raw)
+    lock=json.loads((ROOT/"fixtures/mjourney/equipment-source-certificate-lock-v7.json").read_text())
+    assert manifest["sourceBytesSha256"]==lock["sourceBytesSha256"]
+    assert manifest["semanticSha256"]==lock["sourceSemanticSha256"]
+    seed=helpers["assemble"](source)
+    report=analyze(source,seed,manifest,
+        load_as_diagram(args.input),load_as_diagram(args.loom),
+        load_as_diagram(args.octi),helpers)
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    args.output.write_text(json.dumps(report,indent=2,sort_keys=True)+"\n")
+    # Keep console compact; detailed canonical differences are in the artifact.
+    print(json.dumps({
+        "firstHardGateFailure":report["firstHardGateFailure"],
+        "nativeAccepted":report["nativeAccepted"],
+        "stages":{name:{
+            "stations":r["stations"],"edges":r["graphEdges"],
+            "lineAdjacencyOk":r["perLineAdjacencyPreserved"],
+            "stageOrderOk":r["stageOrder"]["preserved"],
+            "weightedOctilinearity":r["weightedOctilinearity"]["fraction"],
+            "changedLineIds":list(r["perLineAdjacencyDifferences"]),
+            "stageViolations":r["stageOrder"]["violations"],
+        } for name,r in report["stages"].items()},
+    },indent=2))
+    if not report["stages"]["input"]["semanticAudit"]["passed"]:
+        raise SystemExit("Input source projection failed P0a before native solver")
+    # This command is a diagnostic, not acceptance: return 0 for a valid report
+    # even when LOOM output is rejected. Exact-head acceptance remains in
+    # the separate native gate and must fail on solver.used=false.
+
+
+if __name__=="__main__":
+    main()

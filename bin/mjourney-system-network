@@ -258,7 +258,92 @@ def native_geometry(seed,source,path,timeout,manifest):
            "geometryPolicy":"Use solver's exact edge polylines or reject; never re-elbow or guess transfers"}
     return (solved if accepted else seed),proof
 
-def svg_with_stages(original,graph,source):
+def native_line_order_geometry(seed,source,path,timeout,manifest):
+    """Run native LOOM line ordering only, not octi geometry optimization."""
+    geo=to_solver(seed).to_geojson()
+    path.with_suffix(".input.geojson").write_text(json.dumps(geo,indent=2)+"\n")
+    ordered=loom.run("loom",geo,timeout=timeout)
+    path.with_suffix(".loom.geojson").write_text(json.dumps(ordered,indent=2)+"\n")
+    candidate=from_solver(LineGraph.from_geojson(ordered))
+    structural=validate_projection_graph(candidate,manifest,require_source_edge_ids=False)
+    stages=stage_review(candidate,source)
+    angles=poly_review(candidate)
+    lines={line.id for e in candidate.edges for line in e.lines}
+    sid={n.station_id for n in candidate.stations}
+    accepted=(structural["passed"] and stages["preserved"] and angles["octilinear"]
+              and adjacency(candidate)==adjacency(seed)
+              and len(candidate.stations)==len(seed.stations)
+              and sid=={n.station_id for n in seed.stations}
+              and lines==set(LINES))
+    audit={
+        "attempted":True,"used":False,"lineOrderUsed":accepted,
+        "mode":"line_order_only","octiAttempted":False,
+        "coordinateBridge":"exact_synthetic_web_mercator_pr6",
+        "topologyStageEnabled":False,"sourceDirectionReconstructed":False,
+        "sourceSemanticSha256":manifest["semanticSha256"],
+        "postSolverSourceReview":structural,"stageReview":stages,
+        "octilinearReview":angles,
+        "adjacencyPreserved":adjacency(candidate)==adjacency(seed),
+        "stationIdentityPreserved":sid=={n.station_id for n in seed.stations}
+                                   and len(candidate.stations)==len(seed.stations),
+        "lineIdentityPreserved":lines==set(LINES),
+        "reviewStatus":("Native LOOM line ordering used on source-constrained seed; "
+                        "octi not run or accepted" if accepted else
+                        "LOOM line ordering rejected; displayed deterministic seed"),
+    }
+    return (candidate if accepted else seed),audit
+
+
+def restore_line_order_track_provenance(root,source,pointer_to_moment):
+    """Reattach frozen source IDs to the line-order-only SVG.
+
+    LOOM replaces input node IDs with volatile pointers and drops source
+    connection metadata. This never changes solver geometry or assumes that a
+    drawn diagnostic line is a customer itinerary.
+    """
+    ns="{http://www.w3.org/2000/svg}"
+    edges={e["id"]:e for e in source["connections"]}
+    source_by_ends={}
+    for eid in TRACK_IDS:
+        edge=edges.get(eid)
+        if edge is None:
+            raise ValueError(f"missing source connection {eid}")
+        pair=tuple(sorted((edge["fromId"],edge["toId"])))
+        if pair in source_by_ends:
+            raise ValueError(f"ambiguous source connections at {pair}")
+        source_by_ends[pair]=edge
+    line_by_label={line.label:lid for lid,line in LINES.items()}
+    expected={(lid,eid) for lid,chain in ROUTES.items() for eid in chain}
+    seen=set()
+    for group in root.iter(ns+"g"):
+        if group.get("class")!="line":
+            continue
+        lid=line_by_label.get(group.get("data-line"))
+        if lid is None:
+            raise ValueError("unrecognized LOOM line in SVG")
+        for path in group.findall(ns+"path"):
+            src=pointer_to_moment.get(path.get("data-src"))
+            dst=pointer_to_moment.get(path.get("data-dst"))
+            if src is None or dst is None:
+                raise ValueError("LOOM track endpoint lacks canonical Moment identity")
+            edge=source_by_ends.get(tuple(sorted((src,dst))))
+            key=(lid,edge["id"]) if edge else None
+            if key not in expected or key in seen:
+                raise ValueError(f"unmatched or repeated source track {lid}: {src} -> {dst}")
+            seen.add(key)
+            # SVG path direction does not imply authored source direction.
+            path.set("data-src",src)
+            path.set("data-dst",dst)
+            path.set("data-source-edge-id",edge["id"])
+            path.set("data-source-from-id",edge["fromId"])
+            path.set("data-source-to-id",edge["toId"])
+            path.set("data-line-id",lid)
+    if seen!=expected:
+        raise ValueError(f"LOOM tracks incomplete: {len(seen)}/{len(expected)} memberships")
+    return len(seen)
+
+
+def svg_with_stages(original,graph,source,*,restore_line_order_provenance=False):
     ET.register_namespace("","http://www.w3.org/2000/svg")
     namespace="{http://www.w3.org/2000/svg}"
     root=ET.fromstring(original)
@@ -286,6 +371,8 @@ def svg_with_stages(original,graph,source):
     # data-node references back to canonical station IDs before assigning LOD.
     by_pointer={c.attrib.get("data-node"):c.attrib.get("data-station-id")
                 for c in circles if c.attrib.get("data-station-id")}
+    if restore_line_order_provenance:
+        restore_line_order_track_provenance(root,source,by_pointer)
     label_group=root.find(".//"+namespace+"g[@id='labels']")
     if label_group is not None:
         for el in label_group.findall(namespace+"text"):
@@ -779,7 +866,11 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--source",type=Path,default=ROOT/"fixtures/mjourney/equipment-sanitized-v1.json")
     ap.add_argument("--output",type=Path,default=Path("out/cartographic-line-proof"))
-    ap.add_argument("--native-loom",action="store_true")
+    group=ap.add_mutually_exclusive_group()
+    group.add_argument("--native-loom",action="store_true",
+                       help="Run loom and octi with full native acceptance gates")
+    group.add_argument("--native-line-order-only",action="store_true",
+                       help="Run loom only; show source-preserving seed geometry and native line ordering")
     ap.add_argument("--timeout",type=int,default=240)
     args=ap.parse_args()
     raw=args.source.read_bytes()
@@ -800,12 +891,14 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     if args.native_loom:
         graph,solver=native_geometry(seed,source,args.output,args.timeout,manifest)
+    elif args.native_line_order_only:
+        graph,solver=native_line_order_geometry(seed,source,args.output,args.timeout,manifest)
     else:
         graph=seed
         solver={"attempted":False,"used":False,"reviewStatus":"Deterministic seed geometry only; awaiting native LOOM review"}
-    if solver.get("attempted"):
-        solver["reviewStatus"]=("Native LOOM polylines preserved" if solver["used"] else
-                 "Native LOOM candidate REJECTED; displayed seed only")
+    if solver.get("attempted") and solver.get("mode")!="line_order_only":
+        solver["reviewStatus"]=("Native octi geometry accepted" if solver["used"] else
+                 "Native octi candidate REJECTED; displayed source-preserving seed")
     assert adjacency(graph)==adjacency(seed)
     assert {n.station_id for n in graph.stations}==set(SEEDS)
     assert set(graph.labels)=={l.label for l in LINES.values()}
@@ -819,7 +912,8 @@ def main():
         label_offset=12,padding=64,themed=True
        ),line_order=[l.label for l in LINES.values()],
        colors={l.label:l.color for l in LINES.values()})
-    svg=svg_with_stages(result.svg,graph,source)
+    svg=svg_with_stages(result.svg,graph,source,
+                        restore_line_order_provenance=bool(solver.get("lineOrderUsed")))
     audit={"reviewStatus":"full-lifecycle research systems map; owner topology and visual review required",
       "canonical":{"moments":67,"authoredEdges":87,"edited":False},
       "sourceCertificate":{"semanticSha256":manifest["semanticSha256"],
@@ -840,7 +934,10 @@ def main():
           "classification":"Candidate selection routes and shorter authored activity chains, not validated customer travel"},
       "solver":solver,"integrity":{"stationAdjacencyPreserved":adjacency(graph)==adjacency(seed),
           "stagePreserved":stage_review(graph,source)["preserved"],
-          "lineIdentitiesPreserved":True,"nativePolylinesUsedVerbatim":bool(solver.get("used")),
+          "lineIdentitiesPreserved":True,
+          "nativePolylinesUsedVerbatim":bool(solver.get("used") or solver.get("lineOrderUsed")),
+          "nativeOctiGeometryAccepted":bool(solver.get("used")),
+          "nativeLineOrderingAccepted":bool(solver.get("lineOrderUsed")),
           "noTransitTimes":True},
       "renderer":{"source":"schematic.render.render", "labelsDropped":result.dropped_labels}}
     args.output.with_suffix(".svg").write_text(svg)
