@@ -76,6 +76,18 @@ def test_spatial_budgets_are_fixed_and_source_demand_changes_clearance(equipment
     assert all(71 <= row["minGap"] <= row["maxGap"] <= 137 for row in report)
     assert any(max(row["gaps"]) - min(row["gaps"]) > 10 for row in report)
     assert max(row["crossCategoryDemand"][0] for row in report) >= 2
+    assert {row["pressureBand"] for row in report} == {
+        "low", "typical", "high"}
+    assert {row["stageShift"] for row in report} == {-20, 0, 20}
+    assert all(row["crossCategoryEdgeCount"] >= 0 for row in report)
+    # Outer rails must have genuinely stage-varying vertical locations: the
+    # initial fixed-height gap allocator made these paths artificially straight.
+    outer = "layer-0"
+    stage_ys = {
+        round(node.coord[1], 4) for node in projection.graph.nodes.values()
+        if node.props["layerIds"] == [outer]
+    }
+    assert len(stage_ys) >= 3, stage_ys
 
 
 def test_demand_stage_layout_is_deterministic_and_independent_of_relation_order(equipment):
