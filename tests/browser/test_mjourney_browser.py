@@ -5,6 +5,7 @@ All assertions target sanitized public data, no private Dovetail calls.
 """
 from __future__ import annotations
 from pathlib import Path
+import json
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -168,6 +169,43 @@ def main():
         assert corridor["stats"]["totalBends"] < 30, corridor
         assert all(e["minStationClearance"] is None or
                    e["minStationClearance"] >= 13 for e in corridor["paths"]), corridor
+        # Before corridor routing, the eq35→eq37 direct vertical overlay
+        # crossed an unrelated station eq34. The chosen corridor must avoid it.
+        obstacle = page.evaluate("""() => {
+          const pos = window.__mjourneyResearchViewer.positions;
+          const api = window.MJourneyCorridorRouter;
+          const direct = api.distancePointSegment(
+              pos.get("eq34"), pos.get("eq35"), pos.get("eq37"));
+          const planned = window.__mjourneyScene.corridorRoutes()
+              .find(r => r.id === "edge52");
+          return {old: direct, new: planned.minStationClearance,
+                  bends: planned.bends, path: planned.path};
+        }""")
+        assert obstacle["old"] < 13, obstacle
+        assert obstacle["new"] >= 13, obstacle
+        report = {
+            "schema": "mjourney-corridor-geometry-diagnostic/v1",
+            "sourceFixture": "equipment-sanitized-v1",
+            "canonicalStationCount": 67,
+            "canonicalAuthoredEdgeCount": 87,
+            "selectedSourceEdgeIds": sorted(e["id"] for e in corridor["paths"]),
+            "totals": corridor["stats"],
+            "originalEdge52NonincidentStationClearance": obstacle["old"],
+            "routedEdge52MinStationClearance": obstacle["new"],
+            "sourceRoutes": corridor["paths"],
+            "sourceOrStageGeometryChanged": False,
+            "categoryGuideTracksAltered": False,
+            "artisticAcceptanceClaimed": False,
+        }
+        (OUT / "system-corridor-metrics.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        print("CORRIDOR ROUTING METRICS",
+              json.dumps({"totals": report["totals"],
+                          "edge52": obstacle,
+                          "routes": [{"id": e["id"], "bends": e["bends"],
+                                      "guideCrossings": e["guideCrossings"],
+                                      "clearance": e["minStationClearance"]}
+                                     for e in corridor["paths"]]}))
         selected_route_paths = {
             e["id"]: e["path"] for e in corridor["paths"]
         }
