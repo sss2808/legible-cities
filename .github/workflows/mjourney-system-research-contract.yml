@@ -9,6 +9,7 @@ on:
       - "src/schematic/page/mjourney_inspector.js"
       - "src/schematic/page/mjourney_scene.js"
       - "src/schematic/page/mjourney_corridor_router.js"
+      - "docs/MJOURNEY_SYSTEM_CONSTRAINED_CORRIDOR_ROUTING.md"
       - "tests/test_mjourney_corridor_router.cjs"
       - "src/schematic/page/mjourney_labels.js"
       - "tests/browser/test_mjourney_browser.py"
