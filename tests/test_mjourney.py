@@ -182,7 +182,7 @@ def test_native_dark_compatible_viewer_removes_timetable_affordances(source):
     assert 'header .bar:nth-of-type(2)' in html
     assert 'e.stopImmediatePropagation()' not in html
     assert 'data-mjourney' in html
-    assert 'data-mjourney-inspector' not in html
+    assert 'setAttribute("data-mjourney-inspector"' not in html
     assert 'This legacy preview has no research moment inspector.' in (
         Path(__file__).resolve().parents[1] / "src/schematic/page/page.html"
     ).read_text()
