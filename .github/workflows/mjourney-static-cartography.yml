@@ -1,0 +1,72 @@
+name: W382 static transit cartography visual review
+
+on:
+  push:
+    branches:
+      - feature/mjourney-static-cartography-w382
+  pull_request:
+    paths:
+      - "src/schematic/page/mjourney_cartographic_polish.js"
+      - "src/schematic/page/mjourney_labels.js"
+      - "bin/mjourney-preview"
+      - "tests/browser/test_mjourney_cartographic_polish.py"
+      - ".github/workflows/mjourney-static-cartography.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original Legible Cities fork and Chromium
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Syntax and unchanged public equipment source
+        run: |
+          node --check src/schematic/page/mjourney_cartographic_polish.js
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          source = Path("fixtures/mjourney/equipment-sanitized-v1.json").read_bytes()
+          assert hashlib.sha256(source).hexdigest() == "580a66acd1b9f55fe4fa0aa3624bb4aa500028e34cdf8bac01cf138b7c59ce00"
+          print("Unmodified P0a equipment source SHA verified")
+          PY
+      - name: Native source and research contract regressions
+        run: |
+          python -m pytest -q tests/test_mjourney.py tests/test_mjourney_research_contract.py tests/test_mjourney_category_corridors.py
+          node tests/test_mjourney_semantic_review.cjs
+      - name: Build original-renderer static System viewport
+        run: |
+          mkdir -p out
+          python bin/mjourney-preview --system-v3 --stage-demand-corridors --html \
+            --focus-path ae=edge44,edge48,edge49,edge50 \
+            --focus-path direct=edge45,edge51,edge52 \
+            --output out/system-browser.svg
+      - name: Capture and validate real 950x520 and 1440x900 Chromium screenshots
+        run: python tests/browser/test_mjourney_cartographic_polish.py
+      - name: Re-run responsive and source-review visual regressions
+        run: |
+          python tests/browser/test_mjourney_responsive_frame.py
+          python tests/browser/test_mjourney_semantic_review.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-w382-static-cartography
+          path: |
+            out/cartography-w382-950.png
+            out/cartography-w382-1440.png
+            out/cartography-w382-fork-1440.png
+            out/cartography-w382-metrics.json
+            out/system-browser.html
+            out/system-browser.audit.json
+            out/system-browser.research.json
+          retention-days: 30
