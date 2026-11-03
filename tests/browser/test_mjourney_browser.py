@@ -49,6 +49,15 @@ def main():
         focus_select = page.locator("#mj-focus-select")
         assert focus_select.locator("option").count() == 4
         assert page.locator("#mj-source-relationships path").count() == 0
+        frame = page.evaluate("""() => ({
+            width: document.documentElement.scrollWidth,
+            height: document.documentElement.scrollHeight,
+            viewportHeight: window.innerHeight,
+            stageHeight: document.querySelector("#stage").getBoundingClientRect().height
+        })""")
+        assert frame["width"] <= 951
+        assert frame["height"] <= frame["viewportHeight"] + 1, frame
+        assert frame["stageHeight"] >= 200
         page.screenshot(path=str(OUT / "system-overview-950.png"), full_page=True)
         focus_select.select_option("ae")
         assert page.locator("#mj-source-relationships path").count() == 4
