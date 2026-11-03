@@ -42,6 +42,7 @@
   stage.appendChild(layer);
   let mode = "key";
   let selected = "";
+  let focusedStageId = "";
   let scheduled = false;
   let placedIds = [];
 
@@ -70,6 +71,15 @@
     for (const path of activePaths) {
       add(path.momentIds[0]);
       add(path.momentIds[path.momentIds.length - 1]);
+    }
+    // A selected operational stage prioritizes its own source-keyed decisions
+    // without claiming these belong to one directed customer pathway.
+    if (focusedStageId) {
+      const stageMembers = data.canonical.moments
+        .filter(m => m.stageId === focusedStageId)
+        .sort((a, b) => priority(b) - priority(a)
+          || sourceRank.get(a.id) - sourceRank.get(b.id));
+      for (const m of stageMembers) add(m.id);
     }
     for (const path of activePaths)
       for (const mid of path.momentIds) add(mid);
@@ -170,6 +180,10 @@
     selected = event.detail && event.detail.momentId || "";
     schedule();
   });
+  window.addEventListener("mjourney:stage-focus", event => {
+    focusedStageId = event.detail && event.detail.stageId || "";
+    schedule();
+  });
   window.addEventListener("resize", schedule);
   const observer = new ResizeObserver(schedule);
   observer.observe(stage);
@@ -179,6 +193,7 @@
   window.__mjourneyLabels = Object.freeze({
     visibleIds: () => placedIds.slice(),
     currentDensity: () => mode,
+    currentStageId: () => focusedStageId,
     redraw: redraw,
   });
 })();
