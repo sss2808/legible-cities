@@ -101,6 +101,66 @@
       && a.top < b.bottom + pad && a.bottom + pad > b.top;
   }
 
+  // TM-01d: source-preserving, screen-space obstacle sampling from native
+  // category guides and currently highlighted authored relationships.
+  // Never treat a painted guide as a research edge or move an SVG station.
+  function drawnRails(frame) {
+    const rails = [];
+    const paths = svg.querySelectorAll(
+      "#lines path[data-src][data-dst], " +
+      "#mj-source-relationships path, #mj-semantic-review-edges path");
+    for (const path of paths) {
+      if (!path.getClientRects().length) continue; // hidden category filters
+      const matrix = path.getScreenCTM();
+      if (!matrix || !path.getTotalLength) continue;
+      const length = path.getTotalLength();
+      const scale = Math.hypot(matrix.a, matrix.b);
+      if (!(length > 0) || !(scale > 0)) continue;
+      // Sample fine enough for readable labels, but cap work on an unusually
+      // long source-directed relation. Segment-vs-box tests remain exact for
+      // each sampled polyline leg.
+      const count = Math.max(1, Math.min(300, Math.ceil(length * scale / 6)));
+      let previous = null;
+      const weight = path.closest("#lines") ? 1 : 2;
+      for (let i = 0; i <= count; i++) {
+        const point = path.getPointAtLength(length * i / count)
+          .matrixTransform(matrix);
+        const next = {x: point.x - frame.left, y: point.y - frame.top};
+        if (previous) rails.push({a: previous, b: next, weight});
+        previous = next;
+      }
+    }
+    return rails;
+  }
+  function segmentHitsBox(a, b, box, pad) {
+    const xmin = box.left - pad, xmax = box.right + pad;
+    const ymin = box.top - pad, ymax = box.bottom + pad;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    let t0 = 0, t1 = 1;
+    for (const [p, q] of [
+      [-dx, a.x - xmin], [dx, xmax - a.x],
+      [-dy, a.y - ymin], [dy, ymax - a.y],
+    ]) {
+      if (Math.abs(p) < 1e-7) {
+        if (q < 0) return false;
+      } else {
+        const t = q / p;
+        if (p < 0) t0 = Math.max(t0, t);
+        else t1 = Math.min(t1, t);
+        if (t0 > t1) return false;
+      }
+    }
+    return true;
+  }
+  function railPenalty(box, rails) {
+    // A source highlight carries stronger text-clearance preference than a
+    // category guide. All four canonical label anchors are still available.
+    let score = 0;
+    for (const rail of rails)
+      if (segmentHitsBox(rail.a, rail.b, box, 3)) score += rail.weight;
+    return score;
+  }
+
   function redraw() {
     scheduled = false;
     const ctm = svg.getScreenCTM();
@@ -120,6 +180,7 @@
       Math.max(5, Math.floor(frame.width / (mode === "key" ? 60 : 42)))
     );
     const occupied = [];
+    const rails = drawnRails(frame);
     const stripBox = stageStrip.getBoundingClientRect();
     const reservedTop = Math.max(0, stripBox.bottom - frame.top + 5);
     const maxWidth = Math.min(frame.width - 2 * safe, frame.width < 1100 ? 112 : 128);
@@ -143,22 +204,33 @@
         [at.x - width / 2, at.y + 14],
         [at.x + 12, at.y - height / 2],
         [at.x - width - 12, at.y - height / 2],
+        // Nearby source-anchored alternatives offer a clear label without
+        // fabricating a leader line or moving the source station.
+        [at.x - width / 2 - 22, at.y - height - 16],
+        [at.x - width / 2 + 22, at.y - height - 16],
+        [at.x - width / 2 - 22, at.y + 18],
+        [at.x - width / 2 + 22, at.y + 18],
+        [at.x + 18, at.y - height / 2 - 16],
+        [at.x - width - 18, at.y - height / 2 + 16],
       ];
-      let placed = false;
+      let best = null;
       for (const [cx, cy] of choices) {
         const left = Math.round(cx), top = Math.round(cy);
         const box = {left, top, right: left + width, bottom: top + height};
         if (box.left < safe || box.right > frame.width - safe
             || box.top < reservedTop || box.bottom > frame.height - safe
             || occupied.some(other => intersects(box, other))) continue;
-        label.style.left = left + "px";
-        label.style.top = top + "px";
-        occupied.push(box);
-        placedIds.push(mid);
-        placed = true;
-        break;
+        const penalty = railPenalty(box, rails);
+        if (!best || penalty < best.penalty) best = {box, left, top, penalty};
+        if (penalty === 0) break;
       }
-      if (!placed) label.remove();
+      if (best) {
+        label.style.left = best.left + "px";
+        label.style.top = best.top + "px";
+        label.setAttribute("data-rail-clearance-score", String(best.penalty));
+        occupied.push(best.box);
+        placedIds.push(mid);
+      } else label.remove();
     }
     layer.setAttribute("data-visible-count", String(placedIds.length));
   }
