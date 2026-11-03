@@ -187,3 +187,21 @@ def test_native_railway_viewer_keeps_original_trip_picker_separate():
     assert 'return isMJourney ? null : setTrip(from, to);' in page
     assert 'Research journey schematic with ' in page
     assert "Trains move along the lines as the clock runs" in page
+
+
+
+def test_empty_timetable_never_uses_railway_route_planner(equipment, monkeypatch):
+    import datetime as dt
+    from schematic import animate
+    from schematic import render as svg_renderer
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("no trip planner may run for empty research timetable")
+
+    monkeypatch.setattr(animate.RouteNetwork, "build", fail_if_called)
+    projection = build_system_v3(equipment)
+    frame = svg_renderer.render(projection.graph, width=1000)
+    animation = animate.build(frame, projection.graph, [],
+                              date=dt.date(2026, 11, 2))
+    assert animation.trips == []
+    assert animation.paths == []
