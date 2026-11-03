@@ -275,6 +275,19 @@
   document.getElementById("mj-moment-picker")?.addEventListener("change", schedule);
   document.getElementById("mj-category-disclosure")?.addEventListener("click", schedule);
   new ResizeObserver(schedule).observe(stage);
+  // The readable-label layer repositions labels in its own animation frame.
+  // Recheck tag clearance *after* every label layout, not just after controls
+  // change: Chromium may resolve fonts/layout later than the first tag pass.
+  // Observe only the label layer. Our tag mutations cannot retrigger this
+  // observer, so the two-frame placement stays nonrecursive.
+  const readableLabels = document.getElementById("mj-readable-labels");
+  if (readableLabels) {
+    new MutationObserver(schedule).observe(readableLabels, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ["style", "class"],
+    });
+  }
+  document.fonts?.ready.then(schedule);
   schedule();
 
   window.__mjourneyCartography = Object.freeze({
