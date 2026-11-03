@@ -114,6 +114,19 @@ def main():
         page.set_viewport_size({"width": 1440, "height": 900})
         assert page.locator("#mj-stage-strip .mj-stage-name").count() == 10
         assert page.locator("#mj-source-relationships path").count() == 7
+        page.evaluate("window.__mjourneyScene.redrawStages()")
+        y_gap = page.evaluate("""() => {
+          const model = window.__mjourneyResearchViewer;
+          const svg = model.svg, ctm = svg.getScreenCTM();
+          const ys = [...model.positions.values()].map(p => {
+            const pt = svg.createSVGPoint();
+            pt.x = p.x; pt.y = p.y;
+            return pt.matrixTransform(ctm).y;
+          });
+          return Math.min(...ys) -
+            document.querySelector("#mj-stage-strip").getBoundingClientRect().top;
+        }""")
+        assert 35 <= y_gap <= 110, y_gap
         page.screenshot(path=str(OUT / "system-focus-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-research-1440.png"), full_page=True)
         assert not issues, "Browser page errors: " + "; ".join(issues)
