@@ -31,6 +31,13 @@
     positions.set(id, { x, y });
   }
 
+  // Read-only scene helpers share the exact canonical source and native SVG
+  // station coordinates. The separate stage/relationship presentation module
+  // must never reconstruct research edges from painted category guides.
+  window.__mjourneyResearchViewer = Object.freeze({
+    data, svg, stage, morePanel, moments, groups, stages, relationships, positions,
+  });
+
   function elem(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
