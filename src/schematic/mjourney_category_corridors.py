@@ -66,7 +66,7 @@ def spacing_by_stage(
             for gap in gaps:
                 offsets.append(offsets[-1] + gap)
             vertical_center = (offsets[0] + offsets[-1]) / 2
-            ys = [150 + 3 * baseline_gap + (p - vertical_center)
+            ys = [150 + (n - 1) * baseline_gap / 2 + (p - vertical_center)
                   for p in offsets]
         else:
             gaps = []
