@@ -86,7 +86,7 @@
     const guides = [...svg.querySelectorAll("#lines path[data-src][data-dst]")]
       .map(path => {
         const parts = (path.getAttribute("d") || "").match(
-          /-?\\d+(?:\\.\\d+)?(?:e[-+]?\\d+)?/gi) || [];
+          /-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) || [];
         const pts = [];
         for (let i = 0; i + 1 < parts.length; i += 2)
           pts.push({x: Number(parts[i]), y: Number(parts[i + 1])});
