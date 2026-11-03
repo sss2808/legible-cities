@@ -181,7 +181,10 @@
 
   button.addEventListener("click", () => {
     enabled = !enabled;
-    schedule();
+    // A user-operated Fit reset must be immediate: avoid one stale zoom frame
+    // while the source inspector or keyboard focus is still in view.
+    if (frame) cancelAnimationFrame(frame);
+    render();
   });
   window.addEventListener("mjourney:stage-focus", event => {
     currentStageId = event.detail?.stageId || "";
