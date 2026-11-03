@@ -1,0 +1,87 @@
+name: M-Journey TM-01b source semantic review proof
+
+on:
+  push:
+    branches:
+      - feature/mjourney-source-semantic-review-lens
+  pull_request:
+    paths:
+      - "src/schematic/page/mjourney_semantic_review.js"
+      - "tests/test_mjourney_semantic_review.cjs"
+      - "tests/browser/test_mjourney_semantic_review.py"
+      - "bin/mjourney-preview"
+      - "docs/MJOURNEY_SOURCE_SEMANTIC_REVIEW.md"
+      - ".github/workflows/mjourney-source-semantic-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original fork test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Validate isolated JavaScript source-review module
+        run: |
+          node --check src/schematic/page/mjourney_semantic_review.js
+          node tests/test_mjourney_semantic_review.cjs
+      - name: Check bounded existing research/projection contracts
+        run: python -m pytest -q tests/test_mjourney.py tests/test_mjourney_research_contract.py tests/test_mjourney_category_corridors.py
+      - name: Verify frozen public equipment fixture
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          source = Path("fixtures/mjourney/equipment-sanitized-v1.json").read_bytes()
+          assert hashlib.sha256(source).hexdigest() == "580a66acd1b9f55fe4fa0aa3624bb4aa500028e34cdf8bac01cf138b7c59ce00"
+          print("P0a fixture byte fingerprint preserved")
+          PY
+
+  semantic-review-browser:
+    needs: source-review
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original fork and Chromium
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Render native source-backed equipment schematic
+        run: |
+          mkdir -p out
+          python bin/mjourney-preview --system-v3 --stage-demand-corridors --html \
+            --focus-path ae=edge44,edge48,edge49,edge50 \
+            --focus-path direct=edge45,edge51,edge52 \
+            --output out/system-browser.svg
+      - name: Assert semantic overlay source and interaction in Chromium
+        run: python tests/browser/test_mjourney_semantic_review.py
+      - name: Re-run inherited responsive framing acceptance
+        run: python tests/browser/test_mjourney_responsive_frame.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-tm01b-source-semantic-review
+          path: |
+            out/system-browser.html
+            out/system-browser.audit.json
+            out/system-browser.research.json
+            out/semantic-review-baseline-950.png
+            out/semantic-review-handoffs-950.png
+            out/semantic-review-return-950.png
+            out/semantic-review-handoffs-1440.png
+            out/semantic-review-metrics.json
+            out/system-responsive-legend-950.png
+            out/system-responsive-frame-metrics.json
+          retention-days: 30
