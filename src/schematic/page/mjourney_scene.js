@@ -221,7 +221,7 @@
 
   const focusRow = el("div", "mj-focus-tools");
   const focusLabel = el("label", "");
-  focusLabel.textContent = "Source relationships";
+  focusLabel.textContent = "Relationships";
   focusLabel.htmlFor = "mj-focus-select";
   const select = el("select", "");
   select.id = "mj-focus-select";
