@@ -1965,7 +1965,40 @@ def test_the_page_describes_its_map_once_from_the_layout_it_already_has(tmp_path
                               "read where describeMap() is called")
         assert call > page.index(last), (f"describeMap() runs before {last}, "
                                          "so that layer is not hidden")
-    assert page.count("map-description") == 2 and page.count("paragraph.textContent") == 1
+    # Both M-Journey and the ordinary network render exactly one accessible
+    # map description, but they are mutually exclusive *source* branches.
+    # Counting all string literals in page.html conflates two runtime modes.
+    mj_start = body.index("    if (isMJourney) {")
+    exit_marker = "      return;\\n    }"
+    mj_end = body.index(exit_marker, mj_start)
+    research_branch = body[mj_start:mj_end]
+    normal_branch = body[mj_end + len(exit_marker):]
+    assert body.count("    if (isMJourney) {") == 1
+    assert research_branch.count('paragraph.textContent') == 1
+    assert 'mapXY.size' in research_branch
+    assert 'layout.lines.length' in research_branch
+    assert 'Shared colors or crossing lines do not establish an interchange.' in research_branch
+    assert normal_branch.count('paragraph.textContent') == 1
+    assert 'sentences.join(" ")' in normal_branch
+    for branch in (research_branch, normal_branch):
+        # Every active mode creates one invisible paragraph, attaches it
+        # *after* the SVG, describes that SVG by the same exact ID and hides
+        # its SVG children from the accessibility tree. No second paragraph
+        # may be added inside either branch.
+        for expected in (
+            'paragraph.id = "map-description";',
+            'paragraph.className = "sr-only";',
+            'const paragraph = document.createElement("p");',
+            'svg.after(paragraph);',
+            'svg.setAttribute("role", "img");',
+            'svg.setAttribute("aria-describedby", "map-description");',
+            'for (const layer of svg.children) layer.setAttribute("aria-hidden", "true");',
+        ):
+            assert branch.count(expected) == 1, expected
+        assert branch.index('svg.after(paragraph);') < branch.index(
+            'svg.setAttribute("aria-describedby", "map-description");')
+    # No other part of the page may append or retarget the description.
+    assert page.count("map-description") == body.count("map-description")
     seam = page[page.index("window.__present = {"):page.index("__PRESENT__")]
     assert "describeMap" not in seam and "map-description" not in seam
     # The page's data did not grow to carry it: the keys an unnamed, unordered map writes.
