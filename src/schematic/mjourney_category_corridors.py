@@ -11,7 +11,6 @@ transfer, confirmed customer trip, or line-to-line interchange.
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from typing import Any
 
 Coord = tuple[float, float]
@@ -41,6 +40,21 @@ def spacing_by_stage(
         raise ValueError("source stages and layers are required")
     ranks = {l["id"]: i for i, l in enumerate(ordered_layers)}
     n = len(ordered_layers)
+    # A stage-wide shift avoids permanently flat outside rails. Unlike the
+    # old decorative sine wave, its three-valued pressure band is derived from
+    # the ORIGINAL directed cross-category edge records touching each stage.
+    pressure = {
+        stage["id"]: sum(
+            1 for e in connections.values()
+            if moments[e["fromId"]]["layerId"] !=
+               moments[e["toId"]]["layerId"] and
+               stage["id"] in (
+                   moments[e["fromId"]]["stageId"],
+                   moments[e["toId"]]["stageId"])
+        ) for stage in ordered_stages
+    }
+    mean_pressure = sum(pressure.values()) / len(ordered_stages)
+    threshold = max(1.5, mean_pressure * 0.25)
     centers: dict[tuple[str, str], float] = {}
     summary = []
     for stage in ordered_stages:
@@ -71,10 +85,18 @@ def spacing_by_stage(
         else:
             gaps = []
             ys = [150]
+        p = pressure[stage_id]
+        band = ("high" if p > mean_pressure + threshold else
+                "low" if p < mean_pressure - threshold else "typical")
+        stage_shift = (20 if band == "high" else
+                       -20 if band == "low" else 0)
         for layer, y in zip(ordered_layers, ys):
-            centers[(layer["id"], stage_id)] = round(y, 7)
+            centers[(layer["id"], stage_id)] = round(y + stage_shift, 7)
         summary.append({
             "stageId": stage_id,
+            "crossCategoryEdgeCount": p,
+            "pressureBand": band,
+            "stageShift": stage_shift,
             "crossCategoryDemand": demand,
             "gaps": [round(g, 3) for g in gaps],
             "minGap": round(min(gaps), 3) if gaps else None,
