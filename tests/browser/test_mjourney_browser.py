@@ -113,6 +113,23 @@ def main():
         assert "edge44" in detail and "edge45" in detail
         assert "Stage: Authorization" in detail
         assert not page.locator("#mj-inspector").evaluate("(el) => el.hidden")
+        assert page.locator("#mj-research-workspace").count() == 1
+        # At carousel width the details occupy an actual bottom strip, not
+        # map area: source station labels/lines remain unoccluded.
+        dock = page.evaluate("""() => {
+          const stage = document.querySelector('#stage').getBoundingClientRect();
+          const panel = document.querySelector('#mj-inspector').getBoundingClientRect();
+          return {stageBottom: stage.bottom, stageHeight: stage.height,
+                  panelTop: panel.top, panelRight: panel.right,
+                  documentHeight: document.documentElement.scrollHeight,
+                  viewportHeight: window.innerHeight,
+                  panelPosition: getComputedStyle(document.querySelector('#mj-inspector')).position};
+        }""")
+        assert dock["panelPosition"] == "relative", dock
+        assert dock["stageBottom"] <= dock["panelTop"] + 1, dock
+        assert dock["stageHeight"] >= 175, dock
+        assert dock["panelRight"] <= 951, dock
+        assert dock["documentHeight"] <= dock["viewportHeight"] + 1, dock
         page.screenshot(path=str(OUT / "system-research-950.png"), full_page=True)
 
         # Research inspector can be dismissed with the keyboard.
@@ -139,6 +156,21 @@ def main():
 
         # Same generated research source, larger viewport and native Fit.
         page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_function("document.querySelector('#mj-inspector').getBoundingClientRect().left > document.querySelector('#stage').getBoundingClientRect().left")
+        side = page.evaluate("""() => {
+          const stage = document.querySelector('#stage').getBoundingClientRect();
+          const panel = document.querySelector('#mj-inspector').getBoundingClientRect();
+          return {stageRight: stage.right, stageWidth: stage.width,
+                  panelLeft: panel.left, panelWidth: panel.width,
+                  panelBottom: panel.bottom,
+                  viewportHeight: innerHeight,
+                  documentHeight: document.documentElement.scrollHeight};
+        }""")
+        assert side["stageRight"] <= side["panelLeft"] + 1, side
+        assert 280 <= side["panelWidth"] <= 360, side
+        assert side["stageWidth"] >= 900, side
+        assert side["panelBottom"] <= side["viewportHeight"] + 1, side
+        assert side["documentHeight"] <= side["viewportHeight"] + 1, side
         assert page.locator("#mj-stage-strip .mj-stage-name").count() == 10
         assert page.locator("#mj-source-relationships path").count() == 7
         page.evaluate("window.__mjourneyScene.redrawStages()")
