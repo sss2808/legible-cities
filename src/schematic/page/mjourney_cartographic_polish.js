@@ -53,9 +53,13 @@
       box-shadow: 0 1px 4px #0008;
     }
     @media (max-width: 1080px) {
-      :root[data-mjourney-inspector] .mj-stage-name {
+      :root[data-mjourney-inspector] .mj-stage-name[data-visible-stage] {
+        font-size: 0; line-height: 1;
+      }
+      :root[data-mjourney-inspector] .mj-stage-name[data-visible-stage]::after {
+        content: attr(data-visible-stage); display: block;
         font-size: 10px; font-weight: 750; letter-spacing: -.02em;
-        line-height: 1.11;
+        line-height: 1.11; white-space: normal;
       }
       :root[data-mjourney-inspector] .mj-cartography-tag { font-size: 10px; }
       :root[data-mjourney-inspector] #mj-static-cartography-note {
@@ -74,7 +78,7 @@
     for (const span of stageStrip.querySelectorAll("[data-stage-id]")) {
       const full = originalNames.get(span.dataset.stageId);
       if (!full) continue;
-      if (span.textContent !== full) span.textContent = full;
+      span.dataset.visibleStage = full;
       span.title = full;
     }
   }
@@ -282,7 +286,7 @@
     visibleLineTags: () => shownTags.slice(),
     markerCount: () => marks.children.length,
     getStageHeadings: () => [...stageStrip.querySelectorAll("[data-stage-id]")]
-      .map(n => n.textContent),
+      .map(n => n.dataset.visibleStage || n.textContent),
     redraw: () => {nameStages(); redrawTags();},
   });
 })();
