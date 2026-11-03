@@ -298,6 +298,44 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
 
 
 
+
+  /* TM-01c optional desktop exploratory camera. The CSS transform is applied
+     only to native SVG presentation, not to its original viewBox or geometry.
+     Compact/panorama Fit remains the unchanged default. */
+  :root[data-mjourney-inspector] #stage.mj-stage-exploring {
+    background: #1f1915;
+  }
+  :root[data-mjourney-inspector] .mj-stage-explore {
+    position: absolute; z-index: 8; bottom: 18px; left: 18px;
+    display: flex; align-items: center; gap: .65rem;
+    max-width: calc(100% - 36px); padding: .4rem .55rem;
+    border: 1px solid #68554a; border-radius: 6px;
+    background: #1b1613ee; color: #f2ede6;
+    font-size: .78rem; box-shadow: 0 2px 10px #0006;
+  }
+  :root[data-mjourney-inspector] #mj-stage-explore-toggle {
+    cursor: pointer; flex: 0 0 auto; padding: .35rem .6rem;
+    background: #3b2b21; color: #f2ede6; border: 1px solid #b9a08a;
+    border-radius: 4px; font: inherit; font-weight: 700;
+  }
+  :root[data-mjourney-inspector] #mj-stage-explore-toggle:focus-visible {
+    outline: 2px solid #f2b46d; outline-offset: 2px;
+  }
+  :root[data-mjourney-inspector] #mj-stage-explore-toggle[aria-pressed="true"] {
+    background: #f2ede6; color: #241914;
+  }
+  :root[data-mjourney-inspector] #mj-stage-explore-note {
+    max-width: 230px; line-height: 1.2; color: #e0cbb9;
+  }
+  :root[data-mjourney-inspector] #stage.mj-stage-exploring .mj-stage-name {
+    font-weight: 750; font-size: 12.5px;
+    background: #1b1613ce; border-radius: 3px;
+    padding: 2px 3px; box-sizing: border-box;
+  }
+  @media (max-width: 1199px) {
+    :root[data-mjourney-inspector] .mj-stage-explore { display: none !important; }
+  }
+
 """
     if "</style>" not in page:
         raise ValueError("Legible Cities HTML has no style seam")
@@ -321,6 +359,8 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             encoding="utf-8")
         semantic_review = (ROOT / "src/schematic/page/mjourney_semantic_review.js").read_text(
             encoding="utf-8")
+        stage_explore = (ROOT / "src/schematic/page/mjourney_stage_explore.js").read_text(
+            encoding="utf-8")
         page = page.replace(
             "</html>",
             '<script id="mjourney-research" type="application/json">'
@@ -330,6 +370,7 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             + '\n</script>\n<script>\n' + label_hierarchy
             + '\n</script>\n<script>\n' + responsive_frame
             + '\n</script>\n<script>\n' + semantic_review
+            + '\n</script>\n<script>\n' + stage_explore
             + '\n</script>\n</html>', 1)
     return page
 
