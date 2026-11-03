@@ -8,6 +8,7 @@ on:
       - "src/schematic/mjourney_research_contract.py"
       - "src/schematic/page/mjourney_inspector.js"
       - "src/schematic/page/mjourney_scene.js"
+      - "src/schematic/page/mjourney_labels.js"
       - "tests/browser/test_mjourney_browser.py"
       - "src/schematic/page/page.html"
       - "tests/test_mjourney_research_contract.py"
@@ -117,6 +118,8 @@ jobs:
             out/system-browser.research.json
             out/system-research-950.png
             out/system-overview-950.png
+            out/system-key-labels-950.png
+            out/system-more-labels-950.png
             out/system-focus-950.png
             out/system-focus-1440.png
             out/system-research-1440.png
