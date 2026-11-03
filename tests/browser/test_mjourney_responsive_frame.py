@@ -103,6 +103,25 @@ def main():
         assert compact["stageBottom"] <= compact["inspectorTop"] + 1, compact
         assert compact["stageHeight"] >= 175, compact
         assert compact["docH"] <= compact["viewportH"] + 1, compact
+        visibility = page.evaluate("""() => {
+          const stage = document.querySelector("#stage").getBoundingClientRect();
+          const svg = document.querySelector("#stage svg");
+          const ctm = svg.getScreenCTM();
+          const markers = [...svg.querySelectorAll('#stations [data-station-id]')];
+          const visible = markers.map(m => {
+            const p = svg.createSVGPoint();
+            p.x = Number(m.getAttribute("cx"));
+            p.y = Number(m.getAttribute("cy"));
+            const z = p.matrixTransform(ctm);
+            return {id:m.dataset.stationId, x:z.x, y:z.y,
+              inside: z.x >= stage.left+1 && z.x <= stage.right-1 &&
+                      z.y >= stage.top+1 && z.y <= stage.bottom-1};
+          });
+          return {total: visible.length, missed:visible.filter(m => !m.inside)};
+        }""")
+        assert visibility["total"] == 67, visibility
+        assert not visibility["missed"], (
+            "Compact inspector cannot crop canonical stations", visibility)
         page.screenshot(path=str(OUT / "system-responsive-inspector-950.png"),
                         full_page=True)
 
