@@ -254,10 +254,13 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             encoding="utf-8")
         label_hierarchy = (ROOT / "src/schematic/page/mjourney_labels.js").read_text(
             encoding="utf-8")
+        corridor_router = (ROOT / "src/schematic/page/mjourney_corridor_router.js").read_text(
+            encoding="utf-8")
         page = page.replace(
             "</html>",
             '<script id="mjourney-research" type="application/json">'
             + payload + '</script>\n<script>\n' + inspector
+            + '\n</script>\n<script>\n' + corridor_router
             + '\n</script>\n<script>\n' + scene
             + '\n</script>\n<script>\n' + label_hierarchy
             + '\n</script>\n</html>', 1)

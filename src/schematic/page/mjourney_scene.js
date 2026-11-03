@@ -282,23 +282,43 @@
     marker.appendChild(tip);
     defs.appendChild(marker);
   });
-  function octilinear(a, b) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const sx = Math.sign(dx), sy = Math.sign(dy);
-    const diagonal = Math.min(Math.abs(dx), Math.abs(dy));
-    const extra = Math.abs(dx) >= Math.abs(dy)
-      ? (Math.abs(dx) - diagonal) / 2
-      : (Math.abs(dy) - diagonal) / 2;
-    const first = Math.abs(dx) >= Math.abs(dy)
-      ? {x: a.x + sx * extra, y: a.y}
-      : {x: a.x, y: a.y + sy * extra};
-    const second = {x: first.x + sx * diagonal, y: first.y + sy * diagonal};
-    const coords = [a, first, second, b];
-    const distinct = coords.filter((p, i) => !i || p.x !== coords[i - 1].x ||
-      p.y !== coords[i - 1].y);
-    return distinct.map((p, i) => (i ? "L" : "M") +
-      p.x.toFixed(2) + "," + p.y.toFixed(2)).join(" ");
+  // All geometry in this block is expressed in *native SVG coordinates*.
+  // Guides come from the original Legible Cities renderer and are obstacles,
+  // not research relationships or a graph one can navigate.
+  const corridorRouter = window.MJourneyCorridorRouter;
+  if (focus.length && !corridorRouter)
+    throw new Error("M-Journey source corridor router is missing");
+  function readPolyline(path) {
+    const parts = (path.getAttribute("d") || "").match(
+      /-?\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi) || [];
+    const points = [];
+    for (let j = 0; j + 1 < parts.length; j += 2)
+      points.push({x: Number(parts[j]), y: Number(parts[j + 1])});
+    return points;
   }
+  const guidePaths = [...svg.querySelectorAll("#lines path[data-src][data-dst]")]
+    .map(readPolyline).filter(p => p.length >= 2);
+  // Round-robin source order keeps two alternatives equally represented.
+  const sourceOrder = [];
+  for (let step = 0; step < Math.max(0, ...focus.map(f => f.sourceEdgeIds.length)); step++)
+    for (const item of focus) {
+      const id = item.sourceEdgeIds[step];
+      if (!id || sourceOrder.some(e => e.id === id)) continue;
+      const relation = canonicalRelations.get(id);
+      if (!relation) throw new Error("Focus references unknown source edge " + id);
+      sourceOrder.push(relation);
+    }
+  const routes = corridorRouter ? corridorRouter.plan(
+    sourceOrder, positions, guidePaths) : [];
+  const routesById = new Map(routes.map(route => [route.id, route]));
+  const corridorStats = Object.freeze({
+    routeCount: routes.length,
+    guideCrossings: routes.reduce((n, r) => n + r.guideCrossings, 0),
+    totalBends: routes.reduce((n, r) => n + r.bends, 0),
+    maxClearanceViolationCount: routes.filter(r =>
+      r.minStationClearance !== null && r.minStationClearance < 13).length,
+  });
+
   function renderFocus(value) {
     overlay.replaceChildren();
     showJunctions(value);
@@ -309,8 +329,13 @@
         if (!original) throw new Error("Unrecognized directed research relation: " + edgeId);
         const from = positions.get(original.fromId), to = positions.get(original.toId);
         if (!from || !to) throw new Error("Missing canonical station for " + edgeId);
+        const routed = routesById.get(edgeId);
+        if (!routed) throw new Error("Missing verified source corridor geometry " + edgeId);
         const path = svgEl("path");
-        path.setAttribute("d", octilinear(from, to));
+        path.setAttribute("d", routed.path);
+        path.setAttribute("data-corridor-score", String(routed.score));
+        path.setAttribute("data-corridor-crossings", String(routed.guideCrossings));
+        path.setAttribute("data-corridor-bends", String(routed.bends));
         path.setAttribute("data-source-edge-id", edgeId);
         path.setAttribute("data-focus-id", candidate.id);
         path.setAttribute("data-research-kind", original.kind);
@@ -371,5 +396,7 @@
     focusStage,
     junctionRoles: () => sourceJunctions.map(j => ({...j})),
     subduableShortcutCount: () => subduableGuides.filter(e => e.tagName.toLowerCase() === "path").length,
+    corridorRoutes: () => routes.map(r => ({...r, points: r.points.map(p => ({...p}))})),
+    corridorStats: () => ({...corridorStats}),
   });
 })();
