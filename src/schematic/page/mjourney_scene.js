@@ -34,6 +34,62 @@
     return {item, node};
   });
 
+  // Stages are ordinal source domains. Selecting one changes presentation
+  // emphasis only; it never changes authored moment positions or stage order.
+  const stageControl = el("label", "mj-stage-control");
+  stageControl.textContent = "Stage";
+  const stagePicker = el("select", "");
+  stagePicker.id = "mj-stage-picker";
+  stagePicker.setAttribute("aria-label", "Focus operational stage");
+  for (const [id, name] of [["", "All stages"], ...data.canonical.stages.map(
+    (item, i) => [item.id, (i + 1) + ". " + item.name])]) {
+    const option = el("option", "");
+    option.value = id;
+    option.textContent = name;
+    stagePicker.appendChild(option);
+  }
+  stageControl.appendChild(stagePicker);
+  const controlRow = morePanel.querySelector(".mj-research-tools");
+  if (controlRow) controlRow.appendChild(stageControl);
+  const stageGroup = svgEl("g");
+  stageGroup.id = "mj-stage-focus";
+  stageGroup.setAttribute("pointer-events", "none");
+  stageGroup.setAttribute("aria-hidden", "true");
+  const stageRegion = svgEl("rect");
+  const ys = [...positions.values()].map(p => p.y);
+  stageRegion.setAttribute("y", String(Math.min(...ys) - 60));
+  stageRegion.setAttribute("height", String(Math.max(...ys) - Math.min(...ys) + 120));
+  stageRegion.setAttribute("fill", "var(--text)");
+  stageRegion.setAttribute("fill-opacity", ".08");
+  stageRegion.setAttribute("stroke", "var(--text)");
+  stageRegion.setAttribute("stroke-opacity", ".22");
+  stageRegion.setAttribute("stroke-width", "1.5");
+  stageRegion.style.display = "none";
+  stageGroup.appendChild(stageRegion);
+  const nativeLines = svg.querySelector("#lines");
+  if (nativeLines) svg.insertBefore(stageGroup, nativeLines);
+  else svg.insertBefore(stageGroup, svg.firstChild);
+  const domainById = new Map(data.presentation.stageDomains.map(d => [d.id, d]));
+  let activeStageId = "";
+  function focusStage(id) {
+    if (id && !domainById.has(id)) return;
+    activeStageId = id;
+    stagePicker.value = id;
+    const domain = domainById.get(id);
+    if (domain) {
+      stageRegion.setAttribute("x", String(domain.startX));
+      stageRegion.setAttribute("width", String(domain.endX - domain.startX));
+      stageRegion.style.display = "";
+    } else stageRegion.style.display = "none";
+    stageLabels.forEach(({item, node}) => {
+      node.classList.toggle("mj-stage-active", !!id && item.id === id);
+    });
+    window.dispatchEvent(new CustomEvent("mjourney:stage-focus", {
+      detail: {stageId: id},
+    }));
+  }
+  stagePicker.addEventListener("change", () => focusStage(stagePicker.value));
+
   function updateStageHeaders() {
     const rootCTM = svg.getScreenCTM();
     if (!rootCTM) return;
@@ -73,7 +129,11 @@
           * (i - leftIndex) / (rightIndex - leftIndex);
       } else centers[i] = width * (i + .5) / centers.length;
     }
-    stageLabels.forEach(({node}, i) => {
+    stageLabels.forEach(({item, node}, i) => {
+      // At carousel width use readable stage numbers. The full authored
+      // name remains in the select, tooltip and aria-label.
+      node.textContent = window.innerWidth <= 1080
+        ? String(i + 1).padStart(2, "0") : item.name;
       const center = Math.min(width - 15, Math.max(15, centers[i]));
       const leftSpace = i ? Math.abs(center - centers[i - 1]) : center * 2;
       const rightSpace = i + 1 < centers.length
@@ -200,5 +260,7 @@
     stageCount: stageLabels.length,
     availableFocusIds: focus.map(x => x.id),
     redrawStages: updateStageHeaders,
+    activeStageId: () => activeStageId,
+    focusStage,
   });
 })();
