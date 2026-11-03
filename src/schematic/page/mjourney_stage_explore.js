@@ -119,11 +119,19 @@
   }
 
   function updatePresentation() {
-    // Existing stage header and label logic runs against the *same* native
-    // station positions and SVG getScreenCTM, including our CSS zoom.
-    window.__mjourneyScene?.redrawStages?.();
-    window.__mjourneyLabels?.redraw?.();
-    requestAnimationFrame(() => requestAnimationFrame(visibleHeadings));
+    // SVG CSS transforms and upstream responsive native width updates settle
+    // during the next paint. Redrawing in this same JS task reads the stale
+    // screen CTM and can bunch all stage titles against x=0 on Fit/resize.
+    // Keep the original source headers and label engine, but measure AFTER
+    // layout rather than introducing a second station projection.
+    requestAnimationFrame(() => {
+      window.__mjourneyScene?.redrawStages?.();
+      window.__mjourneyLabels?.redraw?.();
+      requestAnimationFrame(() => {
+        window.__mjourneyScene?.redrawStages?.();
+        visibleHeadings();
+      });
+    });
   }
 
   function render() {
