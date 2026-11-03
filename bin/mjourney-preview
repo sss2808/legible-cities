@@ -83,6 +83,43 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     color: var(--text); background: var(--map-bg);
   }
   :root[data-mjourney] .mj-focus-note { font-size: .72rem; opacity: .72; }
+
+  /* The portfolio frame has a fixed viewport: reserve real space for the map.
+     Keep native SVG Fit, never crop stations or add a second geometry solver. */
+  :root[data-mjourney] body {
+    display: flex; flex-direction: column; height: 100dvh; overflow: hidden;
+  }
+  :root[data-mjourney] header {
+    flex: 0 0 auto; position: relative;
+    padding: .38rem 1rem .25rem;
+  }
+  :root[data-mjourney] #more-panel { margin-top: .2rem; }
+  :root[data-mjourney] .panel-row { flex-wrap: nowrap; padding: .12rem 0; gap: .6rem; }
+  :root[data-mjourney] .panel-row #line-toggles {
+    flex: 1 1 auto; min-width: 0; max-width: none;
+  }
+  :root[data-mjourney] .mj-research-tools {
+    flex-wrap: nowrap; padding: .18rem 0; gap: .6rem;
+  }
+  :root[data-mjourney] .mj-focus-tools { flex-wrap: nowrap; }
+  :root[data-mjourney] #stage {
+    display: grid; place-items: center;
+    flex: 1 1 auto; min-height: 0; height: auto;
+    overflow: hidden;
+  }
+  :root[data-mjourney] #stage svg {
+    width: 100%; height: 100%;
+  }
+  @media (max-width: 1080px) {
+    :root[data-mjourney] .mj-focus-note { display: none; }
+    :root[data-mjourney] #mj-moment-picker { max-width: 185px; }
+    :root[data-mjourney] #mj-focus-select { max-width: 155px; }
+  }
+  @media (max-width: 650px) {
+    :root[data-mjourney] .mj-research-tools { flex-wrap: wrap; }
+    :root[data-mjourney] .mj-focus-tools { flex-wrap: wrap; }
+    :root[data-mjourney] header .sub { display: none; }
+  }
   :root[data-mjourney] .mj-inspector[hidden] { display: none !important; }
   :root[data-mjourney] .mj-inspector {
     position: fixed; right: 1rem; bottom: 1rem; z-index: 40;
