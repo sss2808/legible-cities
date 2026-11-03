@@ -201,11 +201,6 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
       grid-row: 3; grid-column: 1;
     }
   }
-  /* Do not stretch octilinear geometry to fill tall frames. Native viewBox
-     Fit is authoritative; all ten stages remain in an uncropped overview. */
-  :root[data-mjourney-inspector] #stage svg {
-    preserve-aspect-ratio: xMidYMid meet;
-  }
 
 
   /* Native tiny 1850-unit SVG names are replaced by clear pixel-scale
