@@ -52,6 +52,14 @@
       background: color-mix(in srgb,var(--bg) 91%, transparent);
       box-shadow: 0 1px 4px #0008;
     }
+    /* Fit the unmodified native SVG viewBox into a docked desktop inspector.
+       Width changes only; never stretch, pan, change the research graph,
+       or override the original full-width overview camera. */
+    @media (min-width: 1091px) {
+      :root[data-mjourney-inspector] .mj-research-workspace #stage > svg {
+        width: calc(100% - 32px) !important; height: auto !important;
+      }
+    }
     @media (max-width: 1080px) {
       :root[data-mjourney-inspector] .mj-stage-name[data-visible-stage] {
         font-size: 0; line-height: 1;
@@ -187,6 +195,12 @@
     branch.appendChild(inner);
   }
   const picker = document.getElementById("mj-focus-select");
+  // The empty focus value actually shows the source-authored overview fork.
+  // Clarify the existing selector without adding another control or route.
+  const overviewOption = picker?.querySelector('option[value=""]');
+  if (overviewOption && overviewOption.textContent.trim() === "No focus") {
+    overviewOption.textContent = "A&E/direct overview";
+  }
   const note = document.createElement("div");
   note.id = "mj-static-cartography-note";
   note.textContent = "Colored routes = research categories. Dashed A&E / direct links = authored relationships, not transit transfers.";

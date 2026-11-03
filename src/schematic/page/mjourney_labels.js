@@ -126,6 +126,27 @@
       Math.max(5, Math.floor(frame.width / (mode === "key" ? 56 : 40)))
     );
     const occupied = [];
+    // Read only the already-rendered decorative Moment markers and approved
+    // source-branch endpoint rings. Do not move a station or invent topology.
+    // Labels must also clear unrelated station disks, not just other labels.
+    const stations = [...svg.querySelectorAll(
+      '#mj-cartographic-markers circle[data-source-moment-ref], ' +
+      '#mj-cartographic-source-branch circle[data-source-junction-ref]')]
+      .map(mark => {
+        const id = mark.dataset.sourceMomentRef || mark.dataset.sourceJunctionRef;
+        const point = svg.createSVGPoint();
+        point.x = Number(mark.getAttribute('cx'));
+        point.y = Number(mark.getAttribute('cy'));
+        const p = point.matrixTransform(ctm);
+        return {id, x: p.x - frame.left, y: p.y - frame.top,
+          r: Number(mark.getAttribute('r')) * Math.hypot(ctm.a, ctm.b) + 2};
+      });
+    const coversOtherStation = (box, id) => stations.some(s => {
+      if (s.id === id) return false;
+      const dx = Math.max(box.left - s.x, 0, s.x - box.right);
+      const dy = Math.max(box.top - s.y, 0, s.y - box.bottom);
+      return dx * dx + dy * dy < s.r * s.r;
+    });
     const stripBox = stageStrip.getBoundingClientRect();
     const reservedTop = Math.max(0, stripBox.bottom - frame.top + 5);
     const maxWidth = Math.min(frame.width - 2 * safe, frame.width < 1100 ? 112 : 128);
@@ -156,7 +177,8 @@
         const box = {left, top, right: left + width, bottom: top + height};
         if (box.left < safe || box.right > frame.width - safe
             || box.top < reservedTop || box.bottom > frame.height - safe
-            || occupied.some(other => intersects(box, other))) continue;
+            || occupied.some(other => intersects(box, other))
+            || coversOtherStation(box, mid)) continue;
         label.style.left = left + "px";
         label.style.top = top + "px";
         occupied.push(box);

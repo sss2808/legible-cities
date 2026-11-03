@@ -65,6 +65,8 @@ jobs:
             out/cartography-w382-950.png
             out/cartography-w382-1440.png
             out/cartography-w382-fork-1440.png
+            out/cartography-w382-inspector-950.png
+            out/cartography-w382-inspector-1440.png
             out/cartography-w382-metrics.json
             out/system-browser.html
             out/system-browser.audit.json

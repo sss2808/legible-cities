@@ -61,7 +61,8 @@ def main() -> None:
                   id:el.dataset.stageId,
                   name:el.dataset.visibleStage,
                   original:el.textContent,
-                  width:el.getBoundingClientRect().width
+                  width:el.getBoundingClientRect().width,
+                  painted:getComputedStyle(el, '::after').content
                 }));
               const box = el => {
                 const r = el.getBoundingClientRect();
@@ -70,13 +71,31 @@ def main() -> None:
               const tags = [...document.querySelectorAll(
                 '#mj-cartography-terminus-labels .mj-cartography-tag')].map(box);
               const labels = [...document.querySelectorAll(
-                '#mj-readable-labels .mj-readable-label')].map(box);
+                '#mj-readable-labels .mj-readable-label')]
+                .map(el => ({...box(el), id:el.dataset.momentId}));
+              const stationDiscs = [...document.querySelectorAll(
+                '#mj-cartographic-markers circle[data-source-moment-ref], ' +
+                '#mj-cartographic-source-branch circle[data-source-junction-ref]')]
+                .map(el => {
+                  const point = source.svg.createSVGPoint();
+                  point.x = Number(el.getAttribute('cx'));
+                  point.y = Number(el.getAttribute('cy'));
+                  const screen = point.matrixTransform(source.svg.getScreenCTM());
+                  const ctm = source.svg.getScreenCTM();
+                  return {id:el.dataset.sourceMomentRef || el.dataset.sourceJunctionRef,
+                    x:screen.x,y:screen.y,
+                    r:Number(el.getAttribute('r'))*Math.hypot(ctm.a,ctm.b)+2};
+                });
+              const note = document.getElementById('mj-static-cartography-note');
               return {sourceMomentCount:source.moments.size,
                 authoredRelations:source.relationships.length,
                 categories:source.data.canonical.categories.length,
                 stationIds:original, markerIds:marks,
                 guideCount:cart.categoryGuideCount(),
-                links, headings, tags, labels,
+                links, headings, tags, labels, stationDiscs,
+                defaultFocusText:document.querySelector(
+                  '#mj-focus-select option:checked').textContent.trim(),
+                branchLegend:note.textContent, branchLegendVisible:!note.hidden,
                 visibleLabelCount:labels.length,
                 branchVisible:getComputedStyle(document.querySelector(
                   '#mj-cartographic-source-branch')).display !== 'none',
@@ -99,6 +118,10 @@ def main() -> None:
                            source["canonical"]["relationships"]) for edge in
                            result["links"])
             assert result["branchVisible"]
+            assert result["defaultFocusText"] == "A&E/direct overview", result
+            assert result["branchLegendVisible"]
+            assert "authored relationships" in result["branchLegend"]
+            assert "not transit transfers" in result["branchLegend"]
             assert result["inspectorHidden"]
             assert result["docWidth"] <= width + 1, result
             assert result["docHeight"] <= height + 1, result
@@ -120,12 +143,28 @@ def main() -> None:
                                 tag["right"] + 4 > label["left"] and
                                 tag["top"] < label["bottom"] + 4 and
                                 tag["bottom"] + 4 > label["top"]), (tag, label)
+            # Every readable label must clear unrelated rendered stations and
+            # source endpoint rings, with a genuine 2px measured margin.
+            for label in result["labels"]:
+                for station in result["stationDiscs"]:
+                    if label["id"] == station["id"]:
+                        continue
+                    dx = max(label["left"] - station["x"], 0,
+                             station["x"] - label["right"])
+                    dy = max(label["top"] - station["y"], 0,
+                             station["y"] - label["bottom"])
+                    assert dx * dx + dy * dy >= station["r"] ** 2, (
+                        label, station)
             # Existing compact DOM remains numbered for legacy navigation
             # tests and accessible names; CSS renders actual source names.
             if width == 950:
                 assert result["headings"][0]["original"] == "01", result
+                assert all(h["painted"] == json.dumps(h["name"]) for h in
+                           result["headings"]), result
             else:
                 assert result["headings"][0]["original"] == "Business need"
+                assert all(h["painted"] == "none" for h in
+                           result["headings"]), result
             page.screenshot(path=str(OUT / f"cartography-w382-{width}.png"),
                             full_page=True)
             records[f"{width}x{height}"] = {
@@ -155,6 +194,33 @@ def main() -> None:
         assert page.locator("#mj-inspector-heading").inner_text() == (
             "Funding authorized")
         assert page.locator("#mj-inspector").is_visible()
+        # The native SVG viewBox must remain intact and all 67 Moment centers
+        # remain inside the *actual docked inspector* map at BOTH viewports.
+        for width, height in [(1440, 900), (950, 520)]:
+            page.set_viewport_size({"width": width, "height": height})
+            page.wait_for_timeout(350)
+            inspector = page.evaluate("""() => {
+              const stage = document.querySelector('#stage').getBoundingClientRect();
+              const svg = document.querySelector('#stage svg');
+              const ctm = svg.getScreenCTM();
+              const visible = [...document.querySelectorAll(
+                '#mj-cartographic-markers circle[data-source-moment-ref]')]
+                .filter(mark => {
+                  const p = svg.createSVGPoint();
+                  p.x = Number(mark.getAttribute('cx'));
+                  p.y = Number(mark.getAttribute('cy'));
+                  const q = p.matrixTransform(ctm);
+                  return q.x >= stage.left && q.x <= stage.right &&
+                         q.y >= stage.top && q.y <= stage.bottom;
+                }).length;
+              return {visible, sourceViewBox:svg.getAttribute('viewBox'),
+                inspectorOpen:!document.querySelector('#mj-inspector').hidden};
+            }""")
+            assert inspector["visible"] == 67, inspector
+            assert inspector["inspectorOpen"]
+            assert inspector["sourceViewBox"], inspector
+            page.screenshot(path=str(OUT / f"cartography-w382-inspector-{width}.png"),
+                            full_page=True)
         page.keyboard.press("Escape")
         assert page.locator("#mj-inspector").is_hidden()
         assert page.locator("#line-toggles .chip").count() == 7
