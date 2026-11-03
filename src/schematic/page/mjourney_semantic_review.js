@@ -66,8 +66,8 @@
     status.setAttribute("aria-live", "polite");
     status.id = "mj-semantic-review-status";
     for (const [value, name] of [
-      ["review:handoffs", "Handoffs (research review, not transfers)"],
-      ["review:returns", "Lifecycle return (research review)"],
+      ["review:handoffs", "Handoffs (review)"],
+      ["review:returns", "Lifecycle return"],
     ]) {
       const option = document.createElement("option");
       option.value = value;
@@ -117,7 +117,8 @@
           path.setAttribute("fill", "none");
           group.appendChild(path);
         }
-        status.textContent = review.handoffs.length + " authored handoffs; " +
+        focusSelect.title = "Authored handoffs only; not approved transit interchanges";
+        status.textContent = "Dashed amber: " + review.handoffs.length + " authored handoffs; " +
           review.handoffs.filter(e => e.crossLayer).length +
           " cross layers. Review candidates, not approved transit interchanges.";
       } else if (value === "review:returns") {
@@ -142,12 +143,14 @@
             group.appendChild(ring);
           }
         }
+        focusSelect.title = "Authored lifecycle recurrence endpoints; not a transit route";
         status.textContent = review.returns.length + " authored lifecycle return: " +
           review.returns.map(e =>
             (moments.get(e.fromId)?.label || e.fromId) + " → " +
             (moments.get(e.toId)?.label || e.toId)).join("; ") +
           ". Endpoint markers only, not a transit route or measured duration.";
       } else {
+        focusSelect.title = "Source-backed relationship focus; not verified customer travel";
         status.textContent = defaultNote;
       }
     }
