@@ -1,0 +1,79 @@
+name: M-Journey System research boundary
+on:
+  push:
+    branches:
+      - feature/mjourney-system-research-contract
+  pull_request:
+    paths:
+      - "src/schematic/mjourney_research_contract.py"
+      - "tests/test_mjourney_research_contract.py"
+      - "bin/mjourney-preview"
+      - "fixtures/mjourney/**"
+      - ".github/workflows/mjourney-system-research-contract.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  canonical-research-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install fork test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Run original adapter and new source contract tests
+        run: python -m pytest -q tests/test_mjourney.py tests/test_mjourney_research_contract.py
+      - name: Frozen equipment source must match P0a original byte certificate
+        run: |
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          source=Path("fixtures/mjourney/equipment-sanitized-v1.json").read_bytes()
+          assert hashlib.sha256(source).hexdigest()=="580a66acd1b9f55fe4fa0aa3624bb4aa500028e34cdf8bac01cf138b7c59ce00"
+          print("P0a original sanitized fixture byte SHA-256 confirmed")
+          PY
+      - name: Render equipment System and two directed focus candidates
+        run: |
+          mkdir -p out
+          python bin/mjourney-preview --system-v3 --html \
+            --focus-path ae_epc=edge44,edge48,edge49,edge50 \
+            --focus-path direct=edge45,edge51,edge52 \
+            --output out/research-equipment.svg
+      - name: Render three-channel starter with the same contract
+        run: |
+          python bin/mjourney-preview --system-v3 \
+            --source fixtures/mjourney/b2b-starter-v1.json \
+            --output out/research-starter.svg
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          e=json.loads(Path("out/research-equipment.research.json").read_text())
+          s=json.loads(Path("out/research-starter.research.json").read_text())
+          assert e["integrity"]["stationCount"]==67
+          assert e["integrity"]["sourceRelationshipCount"]==87
+          assert e["integrity"]["guideCount"]==60
+          assert [x["id"] for x in e["focusSequences"]]==["ae_epc","direct"]
+          assert s["integrity"]["stationCount"]==19
+          assert s["integrity"]["sourceRelationshipCount"]==18
+          assert s["integrity"]["guideCount"]==16
+          assert not e["presentation"]["categoryGuidesNavigable"]
+          assert not s["presentation"]["categoryGuidesNavigable"]
+          print("No invented routes, transfers or canonical source changes")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mjourney-system-canonical-research-contract
+          path: |
+            out/research-equipment.svg
+            out/research-equipment.html
+            out/research-equipment.audit.json
+            out/research-equipment.research.json
+            out/research-starter.svg
+            out/research-starter.audit.json
+            out/research-starter.research.json
+          retention-days: 30
