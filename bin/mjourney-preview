@@ -75,6 +75,9 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     max-height: 35px; overflow: hidden; overflow-wrap: break-word;
     color: var(--text); opacity: .86;
   }
+  :root[data-mjourney] #lines .mj-subdued-category-shortcut {
+    opacity: .18 !important;
+  }
   :root[data-mjourney] .mj-stage-active {
     background: var(--text); color: var(--bg); border-radius: 3px;
     opacity: 1; font-weight: 800; padding: 2px 0;
