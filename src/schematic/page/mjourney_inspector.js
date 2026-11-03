@@ -137,7 +137,7 @@
     if (marker) content.appendChild(elem("p", "mj-inspector-muted",
       "Source graph role: " + (marker.role === "branch-origin" ? "branch origin" :
       "reconvergence") + " (" + marker.edgeIds.join(", ") +
-      "). Large ring means a documented research branching relation, not a transit interchange."));
+      "). Large ring means a source-authored branch or merge, not a transit interchange or proof of customer travel."));
     const incoming = relationships.filter(r => r.toId === id);
     const outgoing = relationships.filter(r => r.fromId === id);
     list("Incoming authored relationships", incoming, "incoming");
