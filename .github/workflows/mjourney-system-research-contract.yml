@@ -130,6 +130,7 @@ jobs:
             out/system-junctions-950.png
             out/system-corridors-950.png
             out/system-corridors-1440.png
+            out/system-corridor-metrics.json
             out/system-junctions-1440.png
             out/system-focus-1440.png
             out/system-stage-950.png
