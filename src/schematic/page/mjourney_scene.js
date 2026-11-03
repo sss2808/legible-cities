@@ -92,14 +92,14 @@
   focus.forEach((item, i) => {
     const marker = svgEl("marker");
     marker.id = "mj-source-arrow-" + i;
-    marker.setAttribute("markerWidth", "5");
-    marker.setAttribute("markerHeight", "5");
-    marker.setAttribute("refX", "4.7");
-    marker.setAttribute("refY", "2.5");
+    marker.setAttribute("markerWidth", "10");
+    marker.setAttribute("markerHeight", "10");
+    marker.setAttribute("refX", "10");
+    marker.setAttribute("refY", "5");
     marker.setAttribute("orient", "auto");
-    marker.setAttribute("markerUnits", "strokeWidth");
+    marker.setAttribute("markerUnits", "userSpaceOnUse");
     const tip = svgEl("path");
-    tip.setAttribute("d", "M0,0 L5,2.5 L0,5 Z");
+    tip.setAttribute("d", "M0,0 L10,5 L0,10 Z");
     tip.setAttribute("fill", colors[i % colors.length]);
     marker.appendChild(tip);
     defs.appendChild(marker);
