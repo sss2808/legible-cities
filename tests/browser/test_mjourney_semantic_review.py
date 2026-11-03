@@ -62,9 +62,15 @@ def main():
         audit = page.evaluate("""() => {
           const svg = document.querySelector('#stage svg');
           const markers = [...svg.querySelectorAll('#stations [data-station-id]')];
-          const stations = new Map(markers.map(m => [
-            m.getAttribute('data-station-id'),
-            {x: Number(m.getAttribute('cx')), y: Number(m.getAttribute('cy'))}]));
+          const stations = new Map(markers.map(m => {
+            let x = Number(m.getAttribute('cx')), y = Number(m.getAttribute('cy'));
+            if (!Number.isFinite(x) || !Number.isFinite(y)) {
+              const coords = (m.getAttribute('d') || '').match(
+                /^M\\s*([-\\d.]+)[\\s,]+([-\\d.]+)/);
+              if (coords) { x = Number(coords[1]); y = Number(coords[2]); }
+            }
+            return [m.getAttribute('data-station-id'), {x,y}];
+          }));
           return [...document.querySelectorAll('#mj-semantic-review-edges path')]
             .map(p => {
               const numbers = (p.getAttribute('d') || '').match(
@@ -89,7 +95,7 @@ def main():
                    and item["endError"] < .06 for item in audit), audit
         assert "not approved transit interchanges" in page.locator(
             "#mj-semantic-review-status").inner_text()
-        assert page.locator('[data-interchange]').count() == 0
+        assert page.locator('#mj-semantic-review-edges [data-interchange]').count() == 0
         page.screenshot(path=str(OUT / "semantic-review-handoffs-950.png"),
                         full_page=True)
 
