@@ -274,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
                         default=ROOT / "out/mjourney-equipment-schematic.svg")
     parser.add_argument("--system-v3", action="store_true",
                         help="Native System schematic with stable seven-line category membership")
+    parser.add_argument("--stage-demand-corridors", action="store_true",
+                        help="Experimental source-demand category spacing and centered stage-safe guide steps")
     parser.add_argument("--network", action="store_true",
                         help="Use actual authored graph topology and cross-layer transitions")
     parser.add_argument("--full", action="store_true",
@@ -289,6 +291,8 @@ def main(argv: list[str] | None = None) -> int:
     source = json.loads(args.source.read_text(encoding="utf-8"))
     if args.focus_path and not args.system_v3:
         parser.error("--focus-path requires --system-v3")
+    if args.stage_demand_corridors and not args.system_v3:
+        parser.error("--stage-demand-corridors requires --system-v3")
     focus_paths = []
     for entry in args.focus_path:
         name, sep, chain = entry.partition("=")
@@ -296,7 +300,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--focus-path requires ID=EDGE_ID,EDGE_ID")
         focus_paths.append({"id": name, "sourceEdgeIds": chain.split(",")})
     if args.system_v3 or args.network:
-        projection = (build_system_v3(source) if args.system_v3
+        projection = (build_system_v3(
+            source, stage_demand_corridors=args.stage_demand_corridors)
+                      if args.system_v3
                       else build_network_projection(source, full=args.full))
         # CDMX-equivalent warm-dark theme, using native Legible Cities styles.
         style = Style(
@@ -344,6 +350,9 @@ def main(argv: list[str] | None = None) -> int:
         "passengerTripPickerSuppressed": bool(args.html),
         "researchNavigationImplemented": bool(args.system_v3 and args.html),
         "stageConstraintStatus": (
+            "source-demand stage corridors; ordinal stage containment and "
+            "native display visual review required"
+            if args.stage_demand_corridors else
             "source-index layout stage gutters; editorial visual review required"
             if args.network or args.system_v3 else "coordinate seeds only; visual review required"),
     }
