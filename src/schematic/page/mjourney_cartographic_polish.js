@@ -73,6 +73,13 @@
       :root[data-mjourney-inspector] #mj-static-cartography-note {
         font-size: 10px; max-width: 95%;
       }
+      /* The compact inspector has its own scrollable flow. Put the research
+         explanation there, instead of painting over the compressed map. */
+      :root[data-mjourney-inspector] .mj-inspector #mj-static-cartography-note {
+        position: static; max-width: 100%; z-index: auto;
+        margin: .12rem 0 .35rem; opacity: 1;
+        box-sizing: border-box; pointer-events: auto;
+      }
     }
   `;
   document.head.appendChild(css);
@@ -205,6 +212,29 @@
   note.id = "mj-static-cartography-note";
   note.textContent = "Colored routes = research categories. Dashed A&E / direct links = authored relationships, not transit transfers.";
   stage.appendChild(note);
+  const inspector = document.getElementById("mj-inspector");
+  const compactInspector = window.matchMedia("(max-width: 1080px)");
+  function placeNote() {
+    const inCompactInspector = compactInspector.matches && inspector && !inspector.hidden;
+    if (inCompactInspector) {
+      if (note.parentElement !== inspector) {
+        const heading = inspector.querySelector(".mj-inspector-head");
+        if (heading) heading.after(note);
+        else inspector.prepend(note);
+      }
+    } else if (note.parentElement !== stage) {
+      stage.appendChild(note);
+    }
+  }
+  // Opening/closing the source inspector changes its layout without a
+  // window resize. Observe only that state and never mutate canonical SVG.
+  if (inspector) {
+    new MutationObserver(placeNote).observe(inspector, {
+      attributes: true, attributeFilter: ["hidden"],
+    });
+  }
+  window.addEventListener("resize", placeNote);
+  placeNote();
   function sync() {
     const defaultFocus = !picker || picker.value === "";
     branch.style.display = defaultFocus ? "" : "none";
