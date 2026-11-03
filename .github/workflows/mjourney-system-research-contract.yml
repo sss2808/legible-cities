@@ -10,6 +10,9 @@ on:
       - "src/schematic/mjourney.py"
       - "tests/test_mjourney_category_corridors.py"
       - "tests/browser/test_mjourney_category_browser.py"
+      - "tests/browser/test_mjourney_responsive_frame.py"
+      - "src/schematic/page/mjourney_responsive_frame.js"
+      - "docs/MJOURNEY_SYSTEM_RESPONSIVE_FRAME_LEGEND.md"
       - "docs/MJOURNEY_STAGE_DEMAND_CATEGORY_CORRIDORS.md"
       - "src/schematic/page/mjourney_inspector.js"
       - "src/schematic/page/mjourney_scene.js"
@@ -125,6 +128,8 @@ jobs:
             --output out/system-browser.svg
       - name: Validate real browser interaction and capture desktop widths
         run: python tests/browser/test_mjourney_browser.py
+      - name: Audit responsive source category legend in browser
+        run: python tests/browser/test_mjourney_responsive_frame.py
       - name: Generate stage-demand System comparison HTML
         run: |
           python bin/mjourney-preview --system-v3 --stage-demand-corridors --html             --focus-path ae=edge44,edge48,edge49,edge50             --focus-path direct=edge45,edge51,edge52             --output out/system-stage-demand.svg
@@ -135,6 +140,11 @@ jobs:
         with:
           name: mjourney-system-research-browser-screens
           path: |
+            out/system-responsive-legend-950.png
+            out/system-responsive-legend-collapsed-950.png
+            out/system-responsive-inspector-950.png
+            out/system-responsive-legend-1440.png
+            out/system-responsive-frame-metrics.json
             out/system-stage-demand.svg
             out/system-stage-demand.html
             out/system-stage-demand.audit.json
