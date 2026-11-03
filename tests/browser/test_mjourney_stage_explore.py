@@ -133,6 +133,17 @@ def main():
           document.querySelector('#stage svg').style.transform""") in ("", "none")
         assert page.locator("#mj-stage-explore-toggle").get_attribute(
             "aria-pressed") == "false"
+        # The native heading strip must be measured *after* reset and not
+        # inherit stale transformed x-coordinates from the explored map.
+        page.wait_for_function("""() => {
+          const stage = document.querySelector('#stage').getBoundingClientRect();
+          const headers = [...document.querySelectorAll(
+            '#mj-stage-strip .mj-stage-name')].map(e=>e.getBoundingClientRect());
+          return headers.length === 10 &&
+            headers[0].left >= stage.left - 1 &&
+            headers[3].left > stage.left + 150 &&
+            headers[6].left > headers[3].left + 150;
+        }""")
 
         # Compact frames never receive the camera, even if user was exploring.
         page.set_viewport_size({"width": 950, "height": 520})
@@ -144,6 +155,23 @@ def main():
         assert page.locator("#line-toggles .chip").count() == 7
         assert page.locator("#stations [data-station-id]").count() == 67
         assert page.locator("#lines path[data-src][data-dst]").count() == 60
+        # Regression: after zoom + stage-10 focus + Fit + viewport resize,
+        # all compact stage headings must return to their *native* positions.
+        # The previous implementation packed all ten at the left margin.
+        page.wait_for_function("""() => {
+          const stage = document.querySelector('#stage').getBoundingClientRect();
+          const labels = [...document.querySelectorAll(
+            '#mj-stage-strip .mj-stage-name')];
+          const boxes = labels.map(e => e.getBoundingClientRect());
+          return labels.length === 10 &&
+            labels[0].textContent === '01' &&
+            labels[9].textContent === '10' &&
+            boxes[0].left >= stage.left - 1 &&
+            boxes[9].right <= stage.right + 1 &&
+            boxes[9].left > stage.left + 650 &&
+            boxes.every((box,i) => i === 0 ||
+              box.left >= boxes[i-1].left + 18);
+        }""")
         page.screenshot(path=str(OUT / "stage-explore-native-fit-950.png"),
                         full_page=True)
         assert not errors, errors
