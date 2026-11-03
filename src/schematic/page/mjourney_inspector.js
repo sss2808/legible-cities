@@ -132,6 +132,12 @@
     content.appendChild(elem("p", "", "Moment evidence: " +
       (m.evidenceClass || "Not supplied") +
       (m.evidenceRefPresent ? " (reference indicated)" : " (no reference indicated)")));
+    const marker = window.__mjourneyScene && window.__mjourneyScene.junctionRoles
+      ? window.__mjourneyScene.junctionRoles().find(j => j.momentId === id) : null;
+    if (marker) content.appendChild(elem("p", "mj-inspector-muted",
+      "Source graph role: " + (marker.role === "branch-origin" ? "branch origin" :
+      "reconvergence") + " (" + marker.edgeIds.join(", ") +
+      "). Large ring means a documented research branching relation, not a transit interchange."));
     const incoming = relationships.filter(r => r.toId === id);
     const outgoing = relationships.filter(r => r.fromId === id);
     list("Incoming authored relationships", incoming, "incoming");
