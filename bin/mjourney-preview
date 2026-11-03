@@ -321,6 +321,8 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             encoding="utf-8")
         semantic_review = (ROOT / "src/schematic/page/mjourney_semantic_review.js").read_text(
             encoding="utf-8")
+        cartography = (ROOT / "src/schematic/page/mjourney_cartographic_polish.js").read_text(
+            encoding="utf-8")
         page = page.replace(
             "</html>",
             '<script id="mjourney-research" type="application/json">'
@@ -330,6 +332,7 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
             + '\n</script>\n<script>\n' + label_hierarchy
             + '\n</script>\n<script>\n' + responsive_frame
             + '\n</script>\n<script>\n' + semantic_review
+            + '\n</script>\n<script>\n' + cartography
             + '\n</script>\n</html>', 1)
     return page
 
