@@ -55,6 +55,8 @@ def main():
         review = existing
         review.select_option("review:handoffs")
         assert existing.input_value() == "review:handoffs"
+        assert review.locator('option[value="review:handoffs"]').inner_text() == "Handoffs (review)"
+        assert "not approved transit interchanges" in review.get_attribute("title")
         assert page.locator("#mj-source-relationships path").count() == 0
         assert page.locator("#mj-source-junctions circle").count() == 0
         paths = page.locator("#mj-semantic-review-edges path")
@@ -102,6 +104,7 @@ def main():
         # Lifecycle recurrence is represented by its REAL endpoints only.
         # Do not draw a giant fabricated rail across ten stage domains.
         review.select_option("review:returns")
+        assert "not a transit route" in review.get_attribute("title")
         assert paths.count() == 0
         rings = page.locator("#mj-semantic-review-edges circle")
         assert rings.count() == 2
