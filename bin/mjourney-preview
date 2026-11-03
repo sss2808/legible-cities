@@ -332,6 +332,10 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     background: #1b1613ce; border-radius: 3px;
     padding: 2px 3px; box-sizing: border-box;
   }
+  :root[data-mjourney-inspector] #stage.mj-stage-exploring .mj-stage-name.mj-stage-active {
+    color: #241914; background: #f2ede6;
+    border: 1px solid #f2b46d;
+  }
   @media (max-width: 1199px) {
     :root[data-mjourney-inspector] .mj-stage-explore { display: none !important; }
   }
