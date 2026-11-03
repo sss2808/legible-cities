@@ -35,7 +35,7 @@ def main():
 
         picker.select_option("eq31")
         assert page.locator("#mj-inspector-heading").inner_text() == "Funding authorized"
-        detail = page.locator("#mj-inspector-body").inner_text()
+        detail = page.locator(".mj-inspector-body").inner_text()
         assert "edge44" in detail and "edge45" in detail
         assert "Stage: Authorization" in detail
         assert not page.locator("#mj-inspector").evaluate("(el) => el.hidden")
@@ -46,7 +46,7 @@ def main():
         assert page.locator("#mj-inspector").evaluate("(el) => el.hidden")
         assert page.evaluate("document.activeElement.id") == "mj-moment-picker"
         picker.select_option("eq01")
-        assert "edge01" in page.locator("#mj-inspector-body").inner_text()
+        assert "edge01" in page.locator(".mj-inspector-body").inner_text()
 
         # Pointer selection uses the same canonical station IDs as the dropdown.
         coords = page.evaluate("""() => {
