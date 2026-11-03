@@ -141,6 +141,92 @@ class StageDifferentialTests(unittest.TestCase):
             self.assertFalse(status["adjacencyPreserved"])
             self.assertEqual(self.v7["adjacency"](graph),self.v7["adjacency"](self.seed))
 
+    def source_track_svg_with_solver_pointers(self):
+        """Build the frozen diagnostic line-track matrix with volatile node IDs."""
+        import xml.etree.ElementTree as ET
+        ns="{http://www.w3.org/2000/svg}"
+        root=ET.Element(ns+"svg")
+        pointer_by_moment={n.station_id:f"0x{i+1:08x}"
+                           for i,n in enumerate(self.seed.stations)}
+        by_pointer={v:k for k,v in pointer_by_moment.items()}
+        edges={e["id"]:e for e in self.source["connections"]}
+        for lid,chain in self.v7["ROUTES"].items():
+            group=ET.SubElement(root,ns+"g",{
+                "class":"line","data-line":self.v7["LINES"][lid].label})
+            for eid in chain:
+                edge=edges[eid]
+                ET.SubElement(group,ns+"path",{
+                    "data-src":pointer_by_moment[edge["fromId"]],
+                    "data-dst":pointer_by_moment[edge["toId"]]})
+        return root,by_pointer
+
+    def test_line_order_svg_restores_all_108_unique_source_line_memberships(self):
+        root,by_pointer=self.source_track_svg_with_solver_pointers()
+        count=self.v7["restore_line_order_track_provenance"](
+            root,self.source,by_pointer)
+        self.assertEqual(count,sum(len(chain) for chain in self.v7["ROUTES"].values()))
+        edges={e["id"]:e for e in self.source["connections"]}
+        ns="{http://www.w3.org/2000/svg}"
+        seen=set()
+        for group in root.iter(ns+"g"):
+            lid=next(lid for lid,line in self.v7["LINES"].items()
+                     if line.label==group.get("data-line"))
+            for path in group.findall(ns+"path"):
+                eid=path.get("data-source-edge-id")
+                edge=edges[eid]
+                self.assertEqual(path.get("data-line-id"),lid)
+                self.assertEqual(path.get("data-source-from-id"),edge["fromId"])
+                self.assertEqual(path.get("data-source-to-id"),edge["toId"])
+                self.assertEqual((path.get("data-src"),path.get("data-dst")),
+                                 (edge["fromId"],edge["toId"]))
+                self.assertNotIn("0x",path.get("data-src"))
+                self.assertNotIn("0x",path.get("data-dst"))
+                self.assertNotIn((lid,eid),seen)
+                seen.add((lid,eid))
+        self.assertEqual(len(seen),count)
+
+    def test_line_order_svg_keeps_authored_direction_when_drawn_reversed(self):
+        root,by_pointer=self.source_track_svg_with_solver_pointers()
+        ns="{http://www.w3.org/2000/svg}"
+        path=next(root.iter(ns+"path"))
+        a,b=path.get("data-src"),path.get("data-dst")
+        path.set("data-src",b)
+        path.set("data-dst",a)
+        self.v7["restore_line_order_track_provenance"](root,self.source,by_pointer)
+        self.assertEqual((path.get("data-src"),path.get("data-dst")),("eq02","eq01"))
+        self.assertEqual((path.get("data-source-from-id"),
+                          path.get("data-source-to-id")),("eq01","eq02"))
+        self.assertEqual(path.get("data-source-edge-id"),"edge01")
+
+    def test_line_order_svg_rejects_unknown_pointer_or_invented_track(self):
+        ns="{http://www.w3.org/2000/svg}"
+        root,by_pointer=self.source_track_svg_with_solver_pointers()
+        path=next(root.iter(ns+"path"))
+        path.set("data-src","0xnot_a_station")
+        with self.assertRaisesRegex(ValueError,"lacks canonical Moment"):
+            self.v7["restore_line_order_track_provenance"](
+                root,self.source,by_pointer)
+
+        root,by_pointer=self.source_track_svg_with_solver_pointers()
+        path=next(root.iter(ns+"path"))
+        eq67_pointer=next(pointer for pointer,mid in by_pointer.items()
+                          if mid=="eq67")
+        path.set("data-dst",eq67_pointer)
+        with self.assertRaisesRegex(ValueError,"unmatched or repeated"):
+            self.v7["restore_line_order_track_provenance"](
+                root,self.source,by_pointer)
+
+    def test_line_order_svg_rejects_duplicated_track_membership(self):
+        ns="{http://www.w3.org/2000/svg}"
+        root,by_pointer=self.source_track_svg_with_solver_pointers()
+        paths=list(root.iter(ns+"path"))
+        paths[1].set("data-src",paths[0].get("data-src"))
+        paths[1].set("data-dst",paths[0].get("data-dst"))
+        with self.assertRaisesRegex(ValueError,"unmatched or repeated"):
+            self.v7["restore_line_order_track_provenance"](
+                root,self.source,by_pointer)
+
+
     def test_coordinate_roundtrip_keeps_all_station_identities(self):
         transformed=self.v7["from_solver"](self.v7["to_solver"](self.seed))
         report=self.analyze(transformed,transformed)
