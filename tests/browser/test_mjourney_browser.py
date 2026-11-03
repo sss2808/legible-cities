@@ -6,7 +6,6 @@ All assertions target sanitized public data, no private Dovetail calls.
 from __future__ import annotations
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 VIEWER = ROOT / "out/system-browser.html"
@@ -14,6 +13,7 @@ OUT = ROOT / "out"
 
 
 def main():
+    from playwright.sync_api import sync_playwright  # browser CI only; pytest collection needs no browser
     assert VIEWER.is_file(), "Generate out/system-browser.html first"
     issues = []
     with sync_playwright() as playwright:
