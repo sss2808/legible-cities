@@ -35,7 +35,10 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     """
     ident = '<meta charset="utf-8">'
     prepaint = (ident + '\n'
-                '<script>document.documentElement.setAttribute("data-mjourney", "")</script>')
+                '<script>document.documentElement.setAttribute("data-mjourney", "");'
+                + ('document.documentElement.setAttribute("data-mjourney-inspector", "");'
+                   if research_contract is not None else '')
+                + '</script>')
     if ident not in page:
         raise ValueError("Legible Cities HTML has no known metadata seam")
     page = page.replace(ident, prepaint, 1)
@@ -191,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         viewer = args.output.with_suffix(".html")
         viewer.write_text(viewer_for_journey(page, research_contract), encoding="utf-8")
         report["render"]["viewer"] = viewer.name
-        report["render"]["viewerModes"] = ["schematic", "linear"]
+        report["render"]["viewerModes"] = (["system"] if args.system_v3 else ["source-network-preview"])
         print(f"Native interactive viewer: {viewer}")
     audit.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"SVG: {args.output}")
