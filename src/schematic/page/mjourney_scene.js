@@ -321,7 +321,10 @@
 
   function renderFocus(value) {
     overlay.replaceChildren();
-    showJunctions(value);
+    // The dependent read-only review lens adds two options to this selector.
+    // Junction rings are only evidence-backed for the original focus chains,
+    // never for handoff/recurrence reviews or a coincident SVG crossing.
+    showJunctions(value === "all" || focus.some(item => item.id === value));
     for (const [i, candidate] of focus.entries()) {
       if (value !== "all" && value !== candidate.id) continue;
       for (const edgeId of candidate.sourceEdgeIds) {
