@@ -294,7 +294,56 @@ def native_line_order_geometry(seed,source,path,timeout,manifest):
     return (candidate if accepted else seed),audit
 
 
-def svg_with_stages(original,graph,source):
+def restore_line_order_track_provenance(root,source,pointer_to_moment):
+    """Reattach frozen source IDs to the line-order-only SVG.
+
+    LOOM replaces input node IDs with volatile pointers and drops source
+    connection metadata. This never changes solver geometry or assumes that a
+    drawn diagnostic line is a customer itinerary.
+    """
+    ns="{http://www.w3.org/2000/svg}"
+    edges={e["id"]:e for e in source["connections"]}
+    source_by_ends={}
+    for eid in TRACK_IDS:
+        edge=edges.get(eid)
+        if edge is None:
+            raise ValueError(f"missing source connection {eid}")
+        pair=tuple(sorted((edge["fromId"],edge["toId"])))
+        if pair in source_by_ends:
+            raise ValueError(f"ambiguous source connections at {pair}")
+        source_by_ends[pair]=edge
+    line_by_label={line.label:lid for lid,line in LINES.items()}
+    expected={(lid,eid) for lid,chain in ROUTES.items() for eid in chain}
+    seen=set()
+    for group in root.iter(ns+"g"):
+        if group.get("class")!="line":
+            continue
+        lid=line_by_label.get(group.get("data-line"))
+        if lid is None:
+            raise ValueError("unrecognized LOOM line in SVG")
+        for path in group.findall(ns+"path"):
+            src=pointer_to_moment.get(path.get("data-src"))
+            dst=pointer_to_moment.get(path.get("data-dst"))
+            if src is None or dst is None:
+                raise ValueError("LOOM track endpoint lacks canonical Moment identity")
+            edge=source_by_ends.get(tuple(sorted((src,dst))))
+            key=(lid,edge["id"]) if edge else None
+            if key not in expected or key in seen:
+                raise ValueError(f"unmatched or repeated source track {lid}: {src} -> {dst}")
+            seen.add(key)
+            # SVG path direction does not imply authored source direction.
+            path.set("data-src",src)
+            path.set("data-dst",dst)
+            path.set("data-source-edge-id",edge["id"])
+            path.set("data-source-from-id",edge["fromId"])
+            path.set("data-source-to-id",edge["toId"])
+            path.set("data-line-id",lid)
+    if seen!=expected:
+        raise ValueError(f"LOOM tracks incomplete: {len(seen)}/{len(expected)} memberships")
+    return len(seen)
+
+
+def svg_with_stages(original,graph,source,*,restore_line_order_provenance=False):
     ET.register_namespace("","http://www.w3.org/2000/svg")
     namespace="{http://www.w3.org/2000/svg}"
     root=ET.fromstring(original)
@@ -322,6 +371,8 @@ def svg_with_stages(original,graph,source):
     # data-node references back to canonical station IDs before assigning LOD.
     by_pointer={c.attrib.get("data-node"):c.attrib.get("data-station-id")
                 for c in circles if c.attrib.get("data-station-id")}
+    if restore_line_order_provenance:
+        restore_line_order_track_provenance(root,source,by_pointer)
     label_group=root.find(".//"+namespace+"g[@id='labels']")
     if label_group is not None:
         for el in label_group.findall(namespace+"text"):
@@ -861,7 +912,8 @@ def main():
         label_offset=12,padding=64,themed=True
        ),line_order=[l.label for l in LINES.values()],
        colors={l.label:l.color for l in LINES.values()})
-    svg=svg_with_stages(result.svg,graph,source)
+    svg=svg_with_stages(result.svg,graph,source,
+                        restore_line_order_provenance=bool(solver.get("lineOrderUsed")))
     audit={"reviewStatus":"full-lifecycle research systems map; owner topology and visual review required",
       "canonical":{"moments":67,"authoredEdges":87,"edited":False},
       "sourceCertificate":{"semanticSha256":manifest["semanticSha256"],
