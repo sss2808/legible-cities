@@ -70,15 +70,35 @@
   if (nativeLines) svg.insertBefore(stageGroup, nativeLines);
   else svg.insertBefore(stageGroup, svg.firstChild);
   const domainById = new Map(data.presentation.stageDomains.map(d => [d.id, d]));
+  // The canonical contract certifies stage identities and ordering, but the
+  // native Legible Cities renderer normalizes geometry afterward. Never use
+  // pre-render projection bounds as a viewer SVG overlay coordinate.
+  const renderedStageX = new Map(data.canonical.stages.map(item => [
+    item.id, data.canonical.moments
+      .filter(m => m.stageId === item.id && positions.has(m.id))
+      .map(m => positions.get(m.id).x),
+  ]));
   let activeStageId = "";
   function focusStage(id) {
     if (id && !domainById.has(id)) return;
     activeStageId = id;
     stagePicker.value = id;
-    const domain = domainById.get(id);
-    if (domain) {
-      stageRegion.setAttribute("x", String(domain.startX));
-      stageRegion.setAttribute("width", String(domain.endX - domain.startX));
+    const sourceDomain = domainById.get(id);
+    if (sourceDomain) {
+      const stageXs = renderedStageX.get(id) || [];
+      if (!stageXs.length) throw new Error("Selected source stage has no rendered station");
+      const minX = Math.min(...stageXs), maxX = Math.max(...stageXs);
+      const index = data.canonical.stages.findIndex(stage => stage.id === id);
+      const prev = data.canonical.stages[index - 1];
+      const next = data.canonical.stages[index + 1];
+      const prevXs = prev && renderedStageX.get(prev.id) || [];
+      const nextXs = next && renderedStageX.get(next.id) || [];
+      const prevMax = prevXs.length ? Math.max(...prevXs) : minX - 60;
+      const nextMin = nextXs.length ? Math.min(...nextXs) : maxX + 60;
+      const leftPad = Math.min(28, Math.max(8, (minX - prevMax) / 2));
+      const rightPad = Math.min(28, Math.max(8, (nextMin - maxX) / 2));
+      stageRegion.setAttribute("x", String(minX - leftPad));
+      stageRegion.setAttribute("width", String(maxX - minX + leftPad + rightPad));
       stageRegion.style.display = "";
     } else stageRegion.style.display = "none";
     stageLabels.forEach(({item, node}) => {
