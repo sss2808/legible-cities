@@ -38,6 +38,10 @@ def test_all_canonical_edges_retained_without_becoming_transit_tracks(equipment)
     assert out["presentation"]["approvedTransfers"] == []
     assert out["presentation"]["categoryGuidesNavigable"] is False
     assert out["presentation"]["interchangesInferredFromMembership"] is False
+    assert sum(m["key"] for m in out["canonical"]["moments"]) == 27
+    assert sum(m["decision"] for m in out["canonical"]["moments"]) == 15
+    assert all(isinstance(m["key"], bool) and isinstance(m["decision"], bool)
+               for m in out["canonical"]["moments"])
 
 
 def test_starter_three_channels_are_not_renamed_seven_workstreams():
