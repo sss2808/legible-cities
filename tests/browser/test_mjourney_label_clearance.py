@@ -8,8 +8,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
-
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "out"
 PAGE = OUT / "system-browser.html"
@@ -74,6 +72,7 @@ AUDIT_JS = r"""() => {
 
 
 def main():
+    from playwright.sync_api import sync_playwright  # optional browser-only dependency
     assert PAGE.is_file(), "Generate out/system-browser.html first"
     errors = []
     with sync_playwright() as engine:
