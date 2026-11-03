@@ -151,6 +151,10 @@ def build_system_contract(source, projection, *, focus_paths=None):
             "id": m["id"], "label": m["label"], "stageId": m["stageId"],
             "layerId": m["layerId"], "evidenceClass": m.get("evidenceClass"),
             "evidenceRefPresent": bool(m.get("evidenceRefPresent")),
+            # Presentation importance comes only from the canonical fixture,
+            # never from geometry, crossings or inferred route prominence.
+            "key": bool(m.get("key")), "decision": bool(m.get("decision")),
+            "momentType": m.get("type"),
         } for m in sorted(moments.values(), key=lambda m: m["id"])],
         "relationships": [{
             "id": e["id"], "fromId": e["fromId"], "toId": e["toId"],
