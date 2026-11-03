@@ -49,6 +49,8 @@ def main():
         existing.select_option("all")
         assert page.locator("#mj-source-relationships path").count() == 7
         assert page.locator("#mj-source-junctions circle").count() == 2
+        page.screenshot(path=str(OUT / "semantic-review-branches-950.png"),
+                        full_page=True)
 
         # Opt-in source-typed handoffs. They never become transport transfers,
         # and selecting them switches OFF the prior vendor-selection focus.
@@ -152,6 +154,13 @@ def main():
         assert (frame["stations"], frame["guides"], frame["overlays"],
                 frame["originalEdges"], frame["canonicalTransfers"]) == (
                     67, 60, 3, 87, 0), frame
+        # Screenshot the same authored vendor alternatives beside the other
+        # semantic modes, without falsely treating them as customer itineraries.
+        existing.select_option("all")
+        assert page.locator("#mj-source-relationships path").count() == 7
+        assert page.locator("#mj-semantic-review-edges path").count() == 0
+        page.screenshot(path=str(OUT / "semantic-review-branches-1440.png"),
+                        full_page=True)
         assert not errors, errors
         summary = {
             "sourceCounts": counts, "handoffGeometry": audit,
