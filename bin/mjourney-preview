@@ -19,22 +19,26 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from schematic import animate  # noqa: E402
 from schematic.mjourney import build_network_projection, build_system_v3, from_json  # noqa: E402
+from schematic.mjourney_research_contract import build_system_contract  # noqa: E402
 from schematic.render import Style, render  # noqa: E402
 
 DEFAULT_SOURCE = ROOT / "fixtures/mjourney/equipment-sanitized-v1.json"
 
 
-def viewer_for_journey(page: str) -> str:
+def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     """Preserve native page and controls, remove transport-specific UI.
 
-    The compiled page remains the upstream Legible Cities HTML/JS/CSS. This is
-    only a *no-schedule presentation mode*: no timetable, no passenger paths,
-    and no clickable route claims on organizational source relationships.
-    No modification of the original renderer or globally shared viewer.
+    The compiled page retains the original fork tracks, SVG and camera. A
+    guarded M-Journey browser mode disables passenger-route behavior; a
+    validated System contract adds the read-only research inspector. The
+    upstream transit behavior remains unchanged without the M-Journey flag.
     """
     ident = '<meta charset="utf-8">'
     prepaint = (ident + '\n'
-                '<script>document.documentElement.setAttribute("data-mjourney", "")</script>')
+                '<script>document.documentElement.setAttribute("data-mjourney", "");'
+                + ('document.documentElement.setAttribute("data-mjourney-inspector", "");'
+                   if research_contract is not None else '')
+                + '</script>')
     if ident not in page:
         raise ValueError("Legible Cities HTML has no known metadata seam")
     page = page.replace(ident, prepaint, 1)
@@ -42,31 +46,56 @@ def viewer_for_journey(page: str) -> str:
   /* M-Journey has no GTFS trains, clock, or service day. Source line controls
      and original Schematic/Linear viewer still work exactly as upstream. */
   :root[data-mjourney] #view-string,
+  :root[data-mjourney] #view-geo,
+  :root[data-mjourney] #view-linear,
   :root[data-mjourney] header .bar:nth-of-type(2),
   :root[data-mjourney] #more,
   :root[data-mjourney] #trip { display: none !important; }
   :root[data-mjourney] #more-panel { display: block !important; margin-top: 0.3rem; }
   :root[data-mjourney] #stage { padding: 0.55rem 0.9rem; }
+  :root[data-mjourney] .back,
+  :root[data-mjourney] header .segmented { display: none !important; }
+  :root[data-mjourney] #line-toggles {
+    flex-wrap: nowrap; overflow-x: auto; max-width: calc(100vw - 2rem);
+    white-space: nowrap; padding-bottom: .2rem;
+  }
+  :root[data-mjourney] .mj-research-tools { display: flex; align-items: center; font-size: .83rem; padding: .3rem 0; }
+  :root[data-mjourney] .mj-research-tools label { display: flex; align-items: center; gap: .5rem; }
+  :root[data-mjourney] #mj-moment-picker { max-width: min(40vw, 250px); min-width: 160px; font: inherit; padding: .35rem; background: var(--map-bg); color: var(--text); }
+  :root[data-mjourney] .mj-inspector[hidden] { display: none !important; }
+  :root[data-mjourney] .mj-inspector {
+    position: fixed; right: 1rem; bottom: 1rem; z-index: 40;
+    width: min(370px, calc(100vw - 2rem)); max-height: min(440px, 70vh);
+    overflow: auto; padding: .8rem 1rem; border: 1px solid var(--text);
+    border-radius: .6rem; background: var(--bg); color: var(--text);
+    box-shadow: 0 6px 25px #0005; font-size: .85rem; line-height: 1.35;
+  }
+  :root[data-mjourney] .mj-inspector-head { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+  :root[data-mjourney] .mj-inspector h2 { font-size: 1.04rem; margin: 0 0 .6rem; }
+  :root[data-mjourney] .mj-inspector h3 { font-size: .88rem; margin: .8rem 0 .3rem; }
+  :root[data-mjourney] .mj-inspector p { margin: .25rem 0; }
+  :root[data-mjourney] .mj-inspector ul { margin: .25rem 0; padding-left: 1.3rem; }
+  :root[data-mjourney] .mj-inspector li { margin-bottom: .25rem; }
+  :root[data-mjourney] .mj-inspector-muted { opacity: .8; }
+  :root[data-mjourney] .mj-inspector button { font: inherit; padding: .25rem .45rem; }
 """
     if "</style>" not in page:
         raise ValueError("Legible Cities HTML has no style seam")
     page = page.replace("</style>", css + "</style>", 1)
-    # Native station clicks request a passenger trip, which would misrepresent
-    # research relationships as interchangeable transit. Intercept them; retain
-    # upstream Schematic/Linear, Labels and line filter button handlers.
-    stop_route_picker = """
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const stage = document.getElementById("stage");
-  stage.addEventListener("click", e => e.stopImmediatePropagation(), true);
-  stage.addEventListener("keydown", e => {
-    if (["Enter", " ", "ArrowLeft", "ArrowRight"].includes(e.key))
-      e.stopImmediatePropagation();
-  }, true);
-});
-</script>
-"""
-    page = page.replace("</html>", stop_route_picker + "</html>", 1)
+    if research_contract is not None:
+        # JSON stays inert. Escape markup-significant characters before
+        # embedding the sanitized canonical source and audit in the viewer.
+        payload = json.dumps(research_contract, ensure_ascii=False,
+                             separators=(",", ":"))
+        payload = (payload.replace("&", "\\u0026").replace("<", "\\u003c")
+                   .replace(">", "\\u003e"))
+        inspector = (ROOT / "src/schematic/page/mjourney_inspector.js").read_text(
+            encoding="utf-8")
+        page = page.replace(
+            "</html>",
+            '<script id="mjourney-research" type="application/json">'
+            + payload + '</script>\n<script>\n' + inspector
+            + '\n</script>\n</html>', 1)
     return page
 
 
@@ -84,9 +113,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--html", action="store_true",
                         help="Also create the upstream Legible Cities Schematic/Linear viewer")
     parser.add_argument("--width", type=float, default=1850.0)
+    parser.add_argument("--focus-path", action="append", default=[],
+                        metavar="ID=EDGE_ID,EDGE_ID",
+                        help="Research-only directed focus chain, e.g. ae=edge44,edge48,edge49,edge50")
     args = parser.parse_args(argv)
 
     source = json.loads(args.source.read_text(encoding="utf-8"))
+    if args.focus_path and not args.system_v3:
+        parser.error("--focus-path requires --system-v3")
+    focus_paths = []
+    for entry in args.focus_path:
+        name, sep, chain = entry.partition("=")
+        if not sep or not name or not chain:
+            parser.error("--focus-path requires ID=EDGE_ID,EDGE_ID")
+        focus_paths.append({"id": name, "sourceEdgeIds": chain.split(",")})
     if args.system_v3 or args.network:
         projection = (build_system_v3(source) if args.system_v3
                       else build_network_projection(source, full=args.full))
@@ -113,6 +153,16 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(result.svg, encoding="utf-8")
     audit = args.output.with_suffix(".audit.json")
+    # Authoritative research graph stays distinct from LineGraph's category
+    # tracks and from the upstream browser's transit route planner.
+    research_contract = None
+    if args.system_v3:
+        research_contract = build_system_contract(
+            source, projection, focus_paths=focus_paths)
+        research_file = args.output.with_suffix(".research.json")
+        research_file.write_text(json.dumps(research_contract, indent=2,
+                                            ensure_ascii=False) + "\n",
+                                 encoding="utf-8")
     report = dict(projection.audit)
     report["render"] = {
         "engine": "schematic.render.render (original Legible Cities)",
@@ -122,10 +172,22 @@ def main(argv: list[str] | None = None) -> int:
         "svg": args.output.name,
         "timetable": None,
         "routingEnabled": False,
+        "internalTransitNetworkBuiltByUpstream": False,
+        "passengerTripPickerSuppressed": bool(args.html),
+        "researchNavigationImplemented": bool(args.system_v3 and args.html),
         "stageConstraintStatus": (
             "source-index layout stage gutters; editorial visual review required"
             if args.network or args.system_v3 else "coordinate seeds only; visual review required"),
     }
+    if research_contract is not None:
+        report["researchContract"] = {
+            "file": research_file.name,
+            "canonicalSemanticSha256": research_contract["canonicalSemanticSha256"],
+            "sourceRelationshipCount": research_contract["integrity"]["sourceRelationshipCount"],
+            "categoryGuidesNavigable": False,
+            "focusSequencesAreCustomerItineraries": False,
+            "sourceAuthorityComesFromGeometry": False,
+        }
     if args.html:
         anim = animate.build(result, projection.graph, [], dt.date(2026, 11, 2),
                              line_order=order)
@@ -135,13 +197,14 @@ def main(argv: list[str] | None = None) -> int:
                    else "Equipment buying journey | M-Journey"),
             name=("B2B channel journey" if source["journeyId"] == "b2b-starter"
                   else "Equipment buying journey"),
-            subtitle="Source-backed transitions · no timetable",
+            subtitle=("Category guides · research connections in details"
+                      if args.system_v3 else "Authored research graph preview"),
             back="https://github.com/sss2808/legible-cities/pull/1",
         )[f"{args.output.stem}.html"]
         viewer = args.output.with_suffix(".html")
-        viewer.write_text(viewer_for_journey(page), encoding="utf-8")
+        viewer.write_text(viewer_for_journey(page, research_contract), encoding="utf-8")
         report["render"]["viewer"] = viewer.name
-        report["render"]["viewerModes"] = ["schematic", "linear"]
+        report["render"]["viewerModes"] = (["system"] if args.system_v3 else ["source-network-preview"])
         print(f"Native interactive viewer: {viewer}")
     audit.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"SVG: {args.output}")

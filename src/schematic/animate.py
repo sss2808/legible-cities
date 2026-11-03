@@ -535,7 +535,9 @@ def build(render: RenderResult, graph: LineGraph, trips: list[Trip],
     opens its rows in it; without one it carries nothing, and the rows
     open A-Z as they always did.
     """
-    net = RouteNetwork.build(render)
+    # Empty/no-service viewers have no train paths to route. The visual track
+    # network must not become a source of implied research traversal.
+    net = RouteNetwork.build(render) if trips else None
     layout = linear.build(graph, order=line_order)
     layout_json = layout.to_json()
     # Every station in the layout gets its name here rather than being read off
