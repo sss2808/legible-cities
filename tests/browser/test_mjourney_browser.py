@@ -84,6 +84,15 @@ def main():
         focus_select = page.locator("#mj-focus-select")
         assert focus_select.locator("option").count() == 4
         assert page.locator("#mj-source-relationships path").count() == 0
+        assert page.locator("#mj-source-junctions circle").count() == 0
+        junctions = page.evaluate("window.__mjourneyScene.junctionRoles()")
+        assert len(junctions) == 2, junctions
+        assert {(j["momentId"], j["role"]) for j in junctions} == {
+            ("eq31", "branch-origin"), ("eq37", "reconvergence")}
+        assert {j["momentId"]: j["edgeIds"] for j in junctions} == {
+            "eq31": ["edge44", "edge45"],
+            "eq37": ["edge50", "edge52"]}
+        assert page.evaluate("window.__mjourneyScene.subduableShortcutCount()") == 1
         frame = page.evaluate("""() => ({
             width: document.documentElement.scrollWidth,
             height: document.documentElement.scrollHeight,
@@ -121,6 +130,10 @@ def main():
         page.screenshot(path=str(OUT / "system-overview-950.png"), full_page=True)
         focus_select.select_option("ae")
         assert page.locator("#mj-source-relationships path").count() == 4
+        assert page.locator("#mj-source-junctions circle").count() == 2
+        assert page.locator('#mj-source-junctions [data-moment-id="eq31"]').get_attribute("data-junction-role") == "branch-origin"
+        assert page.locator('#mj-source-junctions [data-moment-id="eq37"]').get_attribute("data-junction-role") == "reconvergence"
+        assert page.locator("#lines path.mj-subdued-category-shortcut").count() == 1
         assert set(page.locator("#mj-source-relationships path").evaluate_all(
             "(xs) => xs.map(x => x.dataset.sourceEdgeId)")) == {
                 "edge44", "edge48", "edge49", "edge50"}
@@ -133,6 +146,13 @@ def main():
             "(xs) => xs.map(x => x.dataset.sourceEdgeId)")
         assert len(highlighted_ids) == len(set(highlighted_ids)) == 7
         assert "edge45" in highlighted_ids and "edge52" in highlighted_ids
+        # Bigger rings require verified source branching and convergence.
+        # Crossings and intermediate stations remain ordinary markers.
+        ring_ids = page.locator("#mj-source-junctions circle").evaluate_all(
+            "(xs) => xs.map(x => x.dataset.momentId)")
+        assert sorted(ring_ids) == ["eq31", "eq37"]
+        assert page.locator('#mj-source-junctions [data-moment-id="eq32"]').count() == 0
+        page.screenshot(path=str(OUT / "system-junctions-950.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-focus-950.png"), full_page=True)
 
         description = page.locator("#map-description").inner_text()
@@ -147,6 +167,8 @@ def main():
         detail = page.locator(".mj-inspector-body").inner_text()
         assert "edge44" in detail and "edge45" in detail
         assert "Stage: Authorization" in detail
+        assert "Source graph role: branch origin" in detail
+        assert "not a transit interchange" in detail
         assert not page.locator("#mj-inspector").evaluate("(el) => el.hidden")
         assert page.locator("#mj-research-workspace").count() == 1
         # At carousel width the details occupy an actual bottom strip, not
@@ -226,8 +248,13 @@ def main():
             document.querySelector("#mj-stage-strip").getBoundingClientRect().top;
         }""")
         assert 35 <= y_gap <= 110, y_gap
+        page.screenshot(path=str(OUT / "system-junctions-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-focus-1440.png"), full_page=True)
         page.screenshot(path=str(OUT / "system-research-1440.png"), full_page=True)
+        focus_select.select_option("")
+        assert page.locator("#mj-source-junctions circle").count() == 0
+        assert page.locator("#lines path.mj-subdued-category-shortcut").count() == 0
+        assert page.locator("#mj-source-relationships path").count() == 0
         assert not issues, "Browser page errors: " + "; ".join(issues)
         browser.close()
     print("Chromium M-Journey inspector and source-route isolation smoke PASS")

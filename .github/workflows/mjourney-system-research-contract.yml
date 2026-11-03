@@ -121,6 +121,8 @@ jobs:
             out/system-key-labels-950.png
             out/system-more-labels-950.png
             out/system-focus-950.png
+            out/system-junctions-950.png
+            out/system-junctions-1440.png
             out/system-focus-1440.png
             out/system-stage-950.png
             out/system-stage-1440.png
