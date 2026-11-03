@@ -27,8 +27,9 @@
 
   function init(model) {
     if (!model) return null;
-    const {data, svg, morePanel, positions} = model;
+    const {data, svg, morePanel, positions, moments} = model;
     const review = classify(data);
+    if (!review.handoffs.length && !review.returns.length) return null;
     const row = morePanel.querySelector(".mj-research-tools");
     if (!row || !svg || document.getElementById("mj-semantic-review-select"))
       return null;
@@ -149,8 +150,11 @@
             group.appendChild(ring);
           }
         }
-        status.textContent = review.returns.length +
-          " authored lifecycle return: End-of-life to a new need. Endpoint markers only, not a transit route or measured duration.";
+        status.textContent = review.returns.length + " authored lifecycle return: " +
+          review.returns.map(e =>
+            (moments.get(e.fromId)?.label || e.fromId) + " → " +
+            (moments.get(e.toId)?.label || e.toId)).join("; ") +
+          ". Endpoint markers only, not a transit route or measured duration.";
       } else {
         status.textContent = "Original category guides are non-traversable. Source review does not establish customer travel.";
       }
