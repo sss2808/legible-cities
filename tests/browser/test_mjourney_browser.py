@@ -55,6 +55,23 @@ def main():
         stage_select.select_option("stage-4")
         assert page.locator('.mj-stage-name[data-stage-id="stage-4"]').get_attribute("class").find("mj-stage-active") >= 0
         assert page.locator("#mj-stage-focus rect").evaluate("(e) => e.style.display !== 'none'")
+        # A source projection's pre-render x bounds are not native SVG x
+        # coordinates. The highlighted rectangle must contain exactly the
+        # selected stage's actual rendered stations, not a later stage.
+        stage_bounds = page.evaluate("""() => {
+          const model = window.__mjourneyResearchViewer, id = 'stage-4';
+          const xs = stageId => model.data.canonical.moments
+            .filter(m => m.stageId === stageId).map(m => model.positions.get(m.id).x);
+          const selected = xs(id), next = xs('stage-5');
+          const rect = document.querySelector('#mj-stage-focus rect');
+          const x = Number(rect.getAttribute('x'));
+          const right = x + Number(rect.getAttribute('width'));
+          return {x, right, min: Math.min(...selected), max: Math.max(...selected),
+                  nextMin: Math.min(...next)};
+        }""")
+        assert stage_bounds["x"] <= stage_bounds["min"], stage_bounds
+        assert stage_bounds["right"] >= stage_bounds["max"], stage_bounds
+        assert stage_bounds["right"] < stage_bounds["nextMin"], stage_bounds
         page.wait_for_function("window.__mjourneyLabels.currentStageId() === 'stage-4'")
         page.wait_for_function("window.__mjourneyLabels.visibleIds().includes('eq31')")
         after_moments = page.evaluate("""() => [...window.__mjourneyResearchViewer.positions].map(([id, xy]) => [id, xy.x, xy.y])""")
