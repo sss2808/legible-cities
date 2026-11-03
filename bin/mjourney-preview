@@ -75,6 +75,26 @@ def viewer_for_journey(page: str, research_contract: dict | None = None) -> str:
     max-height: 35px; overflow: hidden; overflow-wrap: break-word;
     color: var(--text); opacity: .86;
   }
+  :root[data-mjourney] .mj-stage-active {
+    background: var(--text); color: var(--bg); border-radius: 3px;
+    opacity: 1; font-weight: 800; padding: 2px 0;
+  }
+  :root[data-mjourney] .mj-stage-control {
+    display: inline-flex; gap: .3rem; align-items: center; white-space: nowrap;
+  }
+  :root[data-mjourney] #mj-stage-picker {
+    font: inherit; min-width: 110px; max-width: 160px;
+    padding: .32rem .35rem; color: var(--text);
+    background: var(--map-bg);
+  }
+  @media (max-width: 1080px) {
+    :root[data-mjourney] .mj-stage-name {
+      font-size: 11px; font-weight: 780;
+      letter-spacing: .03em; line-height: 1.2;
+    }
+    :root[data-mjourney] #mj-stage-picker { max-width: 135px; }
+  }
+
   :root[data-mjourney] .mj-research-tools { flex-wrap: wrap; gap: .35rem 1rem; }
   :root[data-mjourney] .mj-focus-tools { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; }
   :root[data-mjourney] .mj-focus-tools label { display: flex; align-items: center; gap: .4rem; }
