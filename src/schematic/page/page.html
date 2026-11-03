@@ -1314,7 +1314,10 @@ __SOCIAL__
   const maxSpan = Math.max.apply(null, trips.map((t, i) => ends[i] - starts[i]));
   const t0 = Math.min.apply(null, starts), t1 = Math.max.apply(null, ends);
 
-  const routes = [...new Set(trips.map(t => t.r))].sort();
+  // Research category controls use drawn, authored lines without inventing
+  // GTFS services; railway controls still use actual served trip routes.
+  const routes = isMJourney ? Object.keys(data.lines || {}).sort()
+    : [...new Set(trips.map(t => t.r))].sort();
   const hidden = new Set();
   const nodes = new Map();
   // Route mode's fade (engine issue 49; the trip itself is further down): the
