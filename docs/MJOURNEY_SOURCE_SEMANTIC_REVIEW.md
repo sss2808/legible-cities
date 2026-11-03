@@ -8,13 +8,13 @@
 
 The existing native System stage-constrained metro and seven colored category filters remain unchanged. The existing directed focus highlights already illustrate the A&E/EPC and direct-customer alternatives `eq31 → eq37`, including source-backed branch/reconvergence rings.
 
-TM-01b adds a distinct, compact **Review** selector underneath the original research controls. It has three options:
+TM-01b **reuses the existing Relationships selector**. It retains the original no-focus and A&E/direct options, and adds two explicitly qualified research-review choices. No extra toolbar row is created:
 
-1. **No review overlay** (default): unchanged category guides, native stations and existing relationship controls.
+1. **No focus** (existing default): unchanged category guides, native stations and existing relationship controls.
 2. **Handoffs (3):** source-authored relationships `edge71` (eq52 C&Q handover → eq53 Validation starts, **same layer**), `edge78` (eq59 Released to production → eq60 Handover, **cross layer**) and `edge84` (eq64 Project closed → eq65 Operate/maintain, **cross layer**). Dashed amber directed source strokes are computed from the *existing actual station positions*, using the already integrated native SVG corridor candidate router. They are labeled as **review candidates, not approved transit interchanges**. No transfer marker, category rail or source edge is created.
 3. **Lifecycle return (1):** original directed `edge87` from eq67 End-of-life to eq01 Need emerges. Only the two actual endpoint stations receive dashed rings, with a textual description. **No full-map transit rail is drawn** from the last stage to the first, because it would misleadingly imply a traversal/scale and conflict with legibility.
 
-Choosing a semantic review option clears any active A&E/direct source-highlight selection; choosing an A&E/direct highlight clears semantic review. Thus sources from different visual contexts cannot silently accumulate into an apparently single customer itinerary.
+Because both source alternatives and review options share a **single native select**, only one focus choice can be active at once. This prevents visually stacking different semantics into a purported single customer itinerary.
 
 All source relationships, IDs, directions, stages, grouping assignments, category continuity and inspector evidence are unchanged. The renderer/visual fork is not a new persisted editor model. Unlike the category guides, the highlighted handoff paths correspond to existing directed source edges; their presentation is still experimental.
 
@@ -31,13 +31,15 @@ Underlying interview/research evidence was not retrieved in this prototype. Sour
 | Path | Change |
 | --- | --- |
 | `src/schematic/page/mjourney_semantic_review.js` | NEW read-only typed-source classifier, review selector, SVG presentation layer and isolated test API |
-| `bin/mjourney-preview` | BOUNDED stacked bootstrap/CSS addition only; original PR #21 responsive/focus code and renderer untouched |
+| `bin/mjourney-preview` | BOUNDED stacked script bootstrap only; no additional CSS/header height or native SVG fit changes |
+| `src/schematic/page/mjourney_scene.js` | BOUNDED one-line safeguard on dependent PR #22: show eq31/eq37 branch rings only for existing authored focus options, not review choices |
+| `tests/browser/test_mjourney_browser.py` | BOUNDED inherited test expectation update for two additional choices in the original Relationships select |
 | `tests/test_mjourney_semantic_review.cjs` | NEW source-snapshot counts, original edge IDs and negative contract cases |
 | `tests/browser/test_mjourney_semantic_review.py` | NEW real Chromium review, source endpoints, reversibility, keyboard-accessible select and viewport metrics |
 | `.github/workflows/mjourney-source-semantic-review.yml` | NEW exact-head CI for original fixture integrity, source/projection tests, Chromium captures |
 | `docs/MJOURNEY_SOURCE_SEMANTIC_REVIEW.md` | NEW decision/provenance/visual acceptance record |
 
-No modifications to `mjourney.py`, `mjourney_research_contract.py`, `mjourney_scene.js`, `mjourney_labels.js`, canonical source fixtures, original renderer, W375 source docs, M-Journey Editor/Product/portfolio, or other agents' PR branches. Fork GPL-3.0 code is not imported into M-Journey or the portfolio.
+No modifications to `mjourney.py`, `mjourney_research_contract.py`, `mjourney_labels.js`, canonical source fixtures, native station geometry, original renderer, W375 source docs, M-Journey Editor/Product/portfolio, or other agents' PR branches. The one-line scene guard and inherited browser expectation update are explicitly stacked on PR #21, never committed to its branch. Fork GPL-3.0 code is not imported into M-Journey or the portfolio.
 
 ## Verification protocol and acceptance boundaries
 
@@ -59,9 +61,11 @@ python tests/browser/test_mjourney_semantic_review.py
 python tests/browser/test_mjourney_responsive_frame.py
 ```
 
-The dedicated workflow also executes original read-only fixture/projection Python tests and checks the P0a frozen byte digest. Browser tests verify original 67 native stations, 87 directed relationships, seven category controls, 60 non-traversable guides, three authored handoff path identities and exact endpoints, two actual lifecycle endpoint markers, no fabricated interchange, and exclusive focus controls at 950 × 520 and 1440 × 900.
+The dedicated workflow also executes original read-only fixture/projection Python tests and checks the P0a frozen byte digest. The existing full research browser workflow continues to exercise the original vendor-alternative UI. Browser tests verify original 67 native stations, 87 directed relationships, seven category controls, 60 non-traversable guides, three authored handoff path identities and exact endpoints, two actual lifecycle endpoint markers, no fabricated interchange, and exclusive focus controls at 950 × 520 and 1440 × 900.
 
 Screenshots and the machine-readable audit are uploaded as CI artifacts for **independent human visual review**. **Automated source tests and screenshots alone cannot approve cartographic appearance**, camera framing, label clarity or the semantic placement of transfers.
+
+**First-run regression and correction:** An initial standalone extra control row passed the new semantic browser test, but failed the inherited 950×520 responsive inspector test: the extra row reduced map height and cropped 14 source station centers. This was not waived. The revision moves review choices into the existing Relationships selector, removes the extra CSS/row and limits branch rings to original focus values. Rerun the inherited responsive and new semantic tests on the revised exact head before acceptance.
 
 The existing upstream parent [PR #20](https://github.com/sss2808/legible-cities/pull/20) and responsive [PR #21](https://github.com/sss2808/legible-cities/pull/21) inherited a general `tests/test_site.py` page-description failure. The new dedicated review suite does not fix or weaken that unrelated upstream test. Broad-suite status and exact-head acceptance must be checked separately before integration.
 
